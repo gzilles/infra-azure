@@ -4,18 +4,27 @@
 #
 # Cria, de forma idempotente:
 #   1. Resource group + storage account + container para o state remoto do Terraform
-#   2. Um app registration por ambiente, com federated credentials para o GitHub Actions (OIDC)
-#   3. As permissões RBAC de cada identidade
-#   4. Preenche os placeholders em envs/*/backend.tf
+#   2. Um resource group por ambiente (dev/stg/prd) — o Terraform passa a
+#      REFERENCIAR esses RGs via data source, nunca a criá-los ou destruí-los
+#   3. Um app registration por ambiente, com federated credentials para o GitHub Actions (OIDC)
+#   4. RBAC de cada identidade, escopado ao resource group do próprio ambiente
+#      (não à subscription inteira) — dev não enxerga prd mesmo numa subscription única
+#   5. Preenche os placeholders em envs/*/backend.tf
 #
 # Rode UMA vez, com uma identidade que tenha Owner na(s) subscription(s)
 # e permissão para criar app registrations no Entra ID.
+#
+# IMPORTANTE: PREFIX e LOCATION_SHORT aqui precisam ser IDÊNTICOS aos valores
+# de `application` e `location_short` em cada envs/<env>/terraform.tfvars —
+# é essa combinação que forma o nome do resource group
+# (rg-<application>-<env>-<location_short>) que o Terraform vai procurar.
 #
 # Uso:
 #   export GITHUB_ORG=minha-org
 #   export GITHUB_REPO=infra-azure
 #   export PREFIX=meuapp
-#   export SUBSCRIPTION_DEV=... SUBSCRIPTION_STG=... SUBSCRIPTION_PRD=...
+#   export LOCATION_SHORT=brs
+#   export SUBSCRIPTION_DEV=... SUBSCRIPTION_STG=... SUBSCRIPTION_PRD=...  # opcional, uma subscription só por padrão
 #   ./bootstrap/bootstrap.sh
 #
 set -euo pipefail
@@ -24,6 +33,7 @@ set -euo pipefail
 
 PREFIX="${PREFIX:-meuapp}"
 LOCATION="${LOCATION:-brazilsouth}"
+LOCATION_SHORT="${LOCATION_SHORT:-brs}"
 ENVIRONMENTS="${ENVIRONMENTS:-dev stg prd}"
 STATE_RG="${STATE_RG:-rg-tfstate-${PREFIX}}"
 STATE_CONTAINER="${STATE_CONTAINER:-tfstate}"
@@ -72,6 +82,7 @@ log "Tenant: ${TENANT_ID}"
 info "Subscription padrão: ${DEFAULT_SUB}"
 info "Repositório GitHub: ${GITHUB_ORG}/${GITHUB_REPO}"
 info "Ambientes: ${ENVIRONMENTS}"
+info "Prefixo/região: ${PREFIX} / ${LOCATION_SHORT} (deve bater com terraform.tfvars)"
 
 # -------------------------------------------------- 1. backend de state remoto
 
@@ -164,8 +175,22 @@ declare -a SUMMARY_LINES=()
 for env in $ENVIRONMENTS; do
   env_sub="$(subscription_for "$env")"
   app_name="gh-${PREFIX}-${env}"
+  env_rg="rg-${PREFIX}-${env}-${LOCATION_SHORT}"
 
   log "Ambiente '${env}' — identidade ${app_name} (subscription ${env_sub})"
+
+  az account set --subscription "$env_sub"
+
+  # O Terraform só REFERENCIA este RG (data source) — nunca cria nem destrói.
+  # Isso também é uma trava de produção mais forte que prevent_destroy:
+  # não existe verbo `terraform destroy` para algo que o Terraform não é dono.
+  info "  Resource group: ${env_rg}"
+  az group create \
+    --name "$env_rg" \
+    --location "$LOCATION" \
+    --tags managed_by=bootstrap environment="$env" application="$PREFIX" \
+    --output none
+  env_rg_id="$(az group show --name "$env_rg" --query id -o tsv)"
 
   app_id="$(az ad app list --display-name "$app_name" --query "[0].appId" -o tsv 2>/dev/null || echo "")"
   if [ -z "$app_id" ] || [ "$app_id" = "null" ]; then
@@ -212,13 +237,15 @@ for env in $ENVIRONMENTS; do
   add_federated_credential "${env}-main-branch"  "${repo_ref}:ref:refs/heads/main"
   add_federated_credential "${env}-environment"  "${repo_ref}:environment:${env}"
 
-  # RBAC: Contributor na subscription do ambiente + acesso ao blob do state.
-  info "  Contributor em /subscriptions/${env_sub}"
+  # RBAC: Contributor só no resource group do ambiente + acesso ao blob do state.
+  # Escopado ao RG, não à subscription: a identidade de dev não enxerga prd
+  # mesmo quando as duas vivem na mesma subscription.
+  info "  Contributor em ${env_rg}"
   az role assignment create \
     --assignee-object-id "$sp_oid" \
     --assignee-principal-type ServicePrincipal \
     --role "Contributor" \
-    --scope "/subscriptions/${env_sub}" \
+    --scope "$env_rg_id" \
     --output none 2>/dev/null || info "  (já existia)"
 
   info "  Storage Blob Data Contributor no state"
@@ -262,6 +289,16 @@ cat <<EOF
    resource group  : ${STATE_RG}
    storage account : ${STATE_SA}
    container       : ${STATE_CONTAINER}
+
+ Resource groups por ambiente (o Terraform só os referencia,
+ nunca os cria nem destrói):
+EOF
+
+for env in $ENVIRONMENTS; do
+  echo "   rg-${PREFIX}-${env}-${LOCATION_SHORT}"
+done
+
+cat <<EOF
 
  Agora registre as variáveis no GitHub (repository variables,
  NÃO secrets — nenhum desses valores é secreto):

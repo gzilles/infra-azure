@@ -1,4 +1,6 @@
-subscription_id = "00000000-0000-0000-0000-000000000000" # TROQUE pela subscription de dev
+# Subscription única (Azure for Students) — os 3 ambientes se isolam por
+# resource group + RBAC, não por subscription. Veja bootstrap/bootstrap.sh.
+subscription_id = "dc05b302-9b10-4421-98ab-054114fb6bed"
 
 environment    = "dev"
 application    = "meuapp"

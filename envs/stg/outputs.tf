@@ -1,6 +1,6 @@
 output "resource_group_name" {
   description = "Resource group principal do ambiente."
-  value       = azurerm_resource_group.main.name
+  value       = data.azurerm_resource_group.main.name
 }
 
 output "vnet_id" {

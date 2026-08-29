@@ -18,14 +18,16 @@ Infraestrutura da Azure como código: **Terraform + GitHub Actions**, autentica�
 │   ├── networking/               # VNet + subnets + um NSG por subnet
 │   └── storage/                  # storage account com padrões seguros
 ├── envs/
-│   ├── dev/                      # state próprio, subscription própria, identidade própria
+│   ├── dev/                      # state próprio, resource group próprio, identidade própria
 │   ├── stg/
-│   └── prd/                      # + prevent_destroy no resource group
+│   └── prd/
 ├── .tflint.hcl
 └── .pre-commit-config.yaml
 ```
 
 Cada ambiente é um diretório raiz independente com o **seu próprio state**. Um erro em `dev` não tem como alcançar `prd`.
+
+O isolamento entre ambientes não depende de subscriptions separadas. O `resource group` de cada ambiente é criado pelo `bootstrap.sh` — o Terraform só o **referencia** via `data source`, nunca cria nem destrói — e cada identidade de CI recebe `Contributor` apenas no RG do seu próprio ambiente. Mesmo com os três ambientes numa única subscription (caso comum em conta pessoal/Azure for Students), a identidade de `dev` não tem permissão para tocar em `prd`.
 
 ---
 
@@ -45,21 +47,24 @@ O `bootstrap.sh` precisa de uma identidade com **Owner** na(s) subscription(s) e
 az login
 ```
 
-Depois exporte a configuração e execute:
+Depois exporte a configuração e execute. Se você tem uma subscription só (caso comum em conta pessoal/Azure for Students), não defina `SUBSCRIPTION_DEV`/`_STG`/`_PRD` — todos os ambientes caem na subscription atual:
 
 ```bash
-GITHUB_ORG=minha-org GITHUB_REPO=infra-azure PREFIX=meuapp SUBSCRIPTION_DEV=<uuid> SUBSCRIPTION_STG=<uuid> SUBSCRIPTION_PRD=<uuid> ./bootstrap/bootstrap.sh
+GITHUB_ORG=minha-org GITHUB_REPO=infra-azure PREFIX=meuapp ./bootstrap/bootstrap.sh
 ```
+
+`PREFIX` (e, se você mudar o padrão, `LOCATION_SHORT`) precisam ser **idênticos** ao `application`/`location_short` que você vai colocar em cada `envs/*/terraform.tfvars` — é essa combinação que forma o nome do resource group que o Terraform espera encontrar.
 
 O que ele faz:
 
 | Etapa | Resultado |
 |---|---|
-| Resource group + storage account | State remoto com versionamento, soft delete de 30 dias e lock `CanNotDelete` |
-| Desabilita shared key | O state só é acessível por Entra ID / RBAC |
+| Resource group + storage account do state | State remoto com versionamento, soft delete de 30 dias e lock `CanNotDelete` |
+| Desabilita shared key no state | O state só é acessível por Entra ID / RBAC |
+| 1 resource group por ambiente | `rg-meuapp-dev-brs`, `rg-meuapp-stg-brs`, `rg-meuapp-prd-brs` — o Terraform só os lê |
 | 1 app registration por ambiente | `gh-meuapp-dev`, `gh-meuapp-stg`, `gh-meuapp-prd` |
 | 3 federated credentials por app | `pull_request`, `ref:refs/heads/main`, `environment:<env>` |
-| RBAC | `Contributor` na subscription do ambiente + `Storage Blob Data Contributor` no state |
+| RBAC | `Contributor` **só no RG do próprio ambiente** + `Storage Blob Data Contributor` no state |
 | Patch nos `backend.tf` | Preenche os placeholders `__STATE_*__` |
 
 No fim ele imprime os comandos `gh variable set` já preenchidos.
@@ -176,8 +181,9 @@ A duplicação entre os `envs/` é intencional: ela permite que produção fique
 
 ## Pontos de atenção
 
-- **A identidade de plan tem `Contributor`.** Funciona, mas é mais permissão do que um plan precisa. Endurecimento natural: um segundo app registration com apenas `Reader` + `Storage Blob Data Contributor` para os jobs de plan, deixando `Contributor` só no apply.
+- **A identidade de plan tem `Contributor`** — escopado ao resource group do próprio ambiente, não à subscription inteira, mas ainda é mais permissão do que um plan precisa. Endurecimento natural: um segundo app registration com apenas `Reader` + `Storage Blob Data Contributor` para os jobs de plan, deixando `Contributor` só no apply.
 - **O artefato `tfplan` pode conter valores sensíveis.** A retenção está em 3 dias. Se houver segredos no state, restrinja quem baixa artefatos ou criptografe o plan antes do upload.
-- **`prevent_destroy` no RG de produção.** Um `terraform destroy` em `prd` falha no plan. Para remover de verdade, é preciso editar o código conscientemente — que é o ponto.
+- **O resource group de cada ambiente não é gerenciado pelo Terraform.** Ele é criado pelo `bootstrap.sh` e referenciado via `data source` — não existe `terraform destroy` para ele. Para renomear ou mover o RG, é o `bootstrap.sh` (ou o `az cli` diretamente) que precisa mudar, não o `main.tf`.
+- **`PREFIX`/`LOCATION_SHORT` do bootstrap e `application`/`location_short` do `terraform.tfvars` precisam bater exatamente.** Se divergirem, o `terraform plan` falha com "resource group não encontrado" — o data source procura um nome que o bootstrap nunca criou.
 - **`shared_access_key_enabled = false`** na storage account da aplicação. Se alguma ferramenta legada precisar de connection string, ela vai quebrar; mude a variável explicitamente em vez de contornar por fora.
 - **O `checkov` roda em modo bloqueante.** Para liberar um achado específico, use um comentário `#checkov:skip=CKV_AZURE_XX:motivo` no recurso — com o motivo escrito.

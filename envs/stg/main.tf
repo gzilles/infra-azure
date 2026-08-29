@@ -1,5 +1,6 @@
 locals {
-  name_prefix = "${var.application}-${var.environment}-${var.location_short}"
+  name_prefix         = "${var.application}-${var.environment}-${var.location_short}"
+  resource_group_name = "rg-${local.name_prefix}"
 
   tags = merge(var.tags, {
     environment = var.environment
@@ -28,18 +29,20 @@ resource "random_string" "storage_suffix" {
   }
 }
 
-resource "azurerm_resource_group" "main" {
-  name     = "rg-${local.name_prefix}"
-  location = var.location
-  tags     = local.tags
+# O resource group é criado pelo bootstrap (bootstrap/bootstrap.sh), não pelo
+# Terraform: cada identidade de CI só tem Contributor dentro do seu próprio RG,
+# então dev não teria permissão de criar o RG de prd mesmo que tentasse — e o
+# Terraform, por só ler o RG, nunca tem como destruí-lo.
+data "azurerm_resource_group" "main" {
+  name = local.resource_group_name
 }
 
 module "networking" {
   source = "../../modules/networking"
 
   name_prefix         = local.name_prefix
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   address_space       = var.address_space
   subnets             = var.subnets
   tags                = local.tags
@@ -49,8 +52,8 @@ module "storage" {
   source = "../../modules/storage"
 
   name                = local.storage_account_name
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   replication_type    = var.storage_replication_type
   containers          = ["app-data"]
 
