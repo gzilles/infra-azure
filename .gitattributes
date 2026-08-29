@@ -1,0 +1,17 @@
+# Normaliza tudo para LF: shell scripts com CRLF quebram no bash,
+# e o runner do GitHub Actions é Linux.
+* text=auto eol=lf
+
+*.sh    text eol=lf
+*.tf    text eol=lf
+*.tfvars text eol=lf
+*.hcl   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+
+# O lock file é gerado pelo Terraform e deve ser versionado como está.
+.terraform.lock.hcl text eol=lf -diff
+
+*.png binary
+*.jpg binary

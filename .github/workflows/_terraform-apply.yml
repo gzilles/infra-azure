@@ -1,0 +1,120 @@
+# Workflow reutilizável: plan -> aprovação manual -> apply DAQUELE plan.
+# O gate de aprovação vive no GitHub Environment (Settings > Environments).
+name: _terraform-apply
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Ambiente: dev, stg ou prd. Precisa existir como GitHub Environment."
+        required: true
+        type: string
+      client_id_var:
+        description: "Nome da repository variable com o client id do app registration."
+        required: true
+        type: string
+      subscription_id_var:
+        description: "Nome da repository variable com o id da subscription."
+        required: true
+        type: string
+
+env:
+  TF_VERSION: "1.9.8"
+  TF_IN_AUTOMATION: "true"
+  ARM_USE_OIDC: "true"
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_CLIENT_ID: ${{ vars[inputs.client_id_var] }}
+  ARM_SUBSCRIPTION_ID: ${{ vars[inputs.subscription_id_var] }}
+
+jobs:
+  plan:
+    name: plan (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      exitcode: ${{ steps.plan.outputs.exitcode }}
+
+    defaults:
+      run:
+        working-directory: envs/${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -no-color -lock-timeout=5m -detailed-exitcode -out=tfplan
+          code=$?
+          set -e
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 1 ]; then exit 1; fi
+          terraform show -no-color tfplan | tee "$GITHUB_STEP_SUMMARY"
+
+      # O arquivo de plan pode conter valores sensíveis: retenção curta.
+      - name: Publicar o plan como artefato
+        if: steps.plan.outputs.exitcode == '2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: envs/${{ inputs.environment }}/tfplan
+          retention-days: 3
+          if-no-files-found: error
+
+  apply:
+    name: apply (${{ inputs.environment }})
+    needs: plan
+    if: needs.plan.outputs.exitcode == '2'
+    runs-on: ubuntu-latest
+    # Aqui mora o gate: required reviewers configurados neste Environment.
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+
+    defaults:
+      run:
+        working-directory: envs/${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: Baixar o plan aprovado
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: envs/${{ inputs.environment }}
+
+      # Aplica o arquivo de plan, não um plan recalculado:
+      # o que foi revisado é exatamente o que vai para a Azure.
+      - name: terraform apply
+        run: terraform apply -input=false -lock-timeout=5m tfplan
+
+      - name: Publicar outputs
+        run: |
+          {
+            echo '### Outputs — `${{ inputs.environment }}`'
+            echo ''
+            echo '```json'
+            terraform output -json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

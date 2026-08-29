@@ -1,0 +1,49 @@
+name: terraform-apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "envs/**"
+      - "modules/**"
+      - ".github/workflows/apply.yml"
+      - ".github/workflows/_terraform-apply.yml"
+  workflow_dispatch:
+
+# Um apply por vez no repositório inteiro; nunca cancelar no meio.
+concurrency:
+  group: tf-apply
+  cancel-in-progress: false
+
+jobs:
+  dev:
+    uses: ./.github/workflows/_terraform-apply.yml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: dev
+      client_id_var: AZURE_CLIENT_ID_DEV
+      subscription_id_var: AZURE_SUBSCRIPTION_ID_DEV
+
+  stg:
+    needs: dev
+    uses: ./.github/workflows/_terraform-apply.yml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: stg
+      client_id_var: AZURE_CLIENT_ID_STG
+      subscription_id_var: AZURE_SUBSCRIPTION_ID_STG
+
+  prd:
+    needs: stg
+    uses: ./.github/workflows/_terraform-apply.yml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: prd
+      client_id_var: AZURE_CLIENT_ID_PRD
+      subscription_id_var: AZURE_SUBSCRIPTION_ID_PRD

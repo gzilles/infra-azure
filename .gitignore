@@ -1,0 +1,30 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+tfplan
+plan.txt
+
+# Arquivos de variáveis com segredos — NUNCA commitar
+*.auto.tfvars
+secrets.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Lock file: DEVE ser commitado (não ignorar .terraform.lock.hcl)
+
+# Ferramentas
+.terraform.tfstate.lock.info
+.tflint.d/
+.checkov.baseline
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
