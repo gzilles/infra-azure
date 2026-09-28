@@ -20,7 +20,8 @@ resource "azurerm_subnet" "this" {
     for_each = each.value.delegation == null ? [] : [each.value.delegation]
 
     content {
-      name = delegation.value.name
+      # O nome da delegação é um segmento de ID de recurso e não aceita "/".
+      name = replace(delegation.value.name, "/", ".")
 
       service_delegation {
         name    = delegation.value.name

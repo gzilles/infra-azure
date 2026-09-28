@@ -28,5 +28,11 @@ provider "azurerm" {
       purge_soft_delete_on_destroy    = false
       recover_soft_deleted_key_vaults = true
     }
+
+    # O firewall das storage accounts nega a máquina do operador; sem isto o
+    # provider tenta ler propriedades pelo data plane e o apply falha com 403.
+    storage {
+      data_plane_available = false
+    }
   }
 }

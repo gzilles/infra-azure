@@ -55,10 +55,13 @@ module "storage" {
   resource_group_name = data.azurerm_resource_group.main.name
   location            = data.azurerm_resource_group.main.location
   replication_type    = var.storage_replication_type
-  containers          = ["app-data"]
+  containers          = ["app-data", "func-deploy"]
 
-  # Só a subnet de dados alcança a conta; o resto é negado.
-  allowed_subnet_ids = [module.networking.subnet_ids["data"]]
+  # Só as subnets de dados e da aplicação (Function) alcançam a conta.
+  allowed_subnet_ids = [
+    module.networking.subnet_ids["data"],
+    module.networking.subnet_ids["app"],
+  ]
 
   tags = local.tags
 }
