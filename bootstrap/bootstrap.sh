@@ -3,13 +3,14 @@
 # Bootstrap do repositório de IaC.
 #
 # Cria, de forma idempotente:
+#   0. Registro dos resource providers usados pela infra
 #   1. Resource group + storage account + container para o state remoto do Terraform
 #   2. Um resource group por ambiente (dev/stg/prd) — o Terraform passa a
 #      REFERENCIAR esses RGs via data source, nunca a criá-los ou destruí-los
-#   3. Um app registration por ambiente, com federated credentials para o GitHub Actions (OIDC)
-#   4. RBAC de cada identidade, escopado ao resource group do próprio ambiente
+#   3. Um app registration por ambiente, com federated credentials para o GitHub Actions (OIDC),
+#      e RBAC de cada identidade escopado ao resource group do próprio ambiente
 #      (não à subscription inteira) — dev não enxerga prd mesmo numa subscription única
-#   5. Preenche os placeholders em envs/*/backend.tf
+#   4. Preenche os placeholders em envs/*/backend.tf
 #
 # Rode UMA vez, com uma identidade que tenha Owner na(s) subscription(s)
 # e permissão para criar app registrations no Entra ID.
@@ -240,7 +241,23 @@ az lock create \
   --resource-group "$STATE_RG" \
   --output none 2>/dev/null || warn "Não foi possível criar o lock (precisa de Owner/User Access Administrator)."
 
-# ------------------------------------- 2. identidades OIDC, uma por ambiente
+# ------------------------------------- 2. resource groups, um por ambiente
+
+# Loop separado das identidades: se o Entra ID bloquear app registrations,
+# os RGs de todos os ambientes já existem e o Terraform consegue rodar local.
+# O Terraform só REFERENCIA estes RGs (data source) — nunca cria nem destrói.
+for env in $ENVIRONMENTS; do
+  env_rg="rg-${PREFIX}-${env}-${LOCATION_SHORT}"
+  log "Resource group do ambiente '${env}': ${env_rg}"
+  az account set --subscription "$(subscription_for "$env")"
+  az group create \
+    --name "$env_rg" \
+    --location "$LOCATION" \
+    --tags managed_by=bootstrap environment="$env" application="$PREFIX" \
+    --output none
+done
+
+# ------------------------------------- 3. identidades OIDC, uma por ambiente
 
 declare -a SUMMARY_LINES=()
 
@@ -252,16 +269,6 @@ for env in $ENVIRONMENTS; do
   log "Ambiente '${env}' — identidade ${app_name} (subscription ${env_sub})"
 
   az account set --subscription "$env_sub"
-
-  # O Terraform só REFERENCIA este RG (data source) — nunca cria nem destrói.
-  # Isso também é uma trava de produção mais forte que prevent_destroy:
-  # não existe verbo `terraform destroy` para algo que o Terraform não é dono.
-  info "  Resource group: ${env_rg}"
-  az group create \
-    --name "$env_rg" \
-    --location "$LOCATION" \
-    --tags managed_by=bootstrap environment="$env" application="$PREFIX" \
-    --output none
   env_rg_id="$(az group show --name "$env_rg" --query id -o tsv)"
 
   app_id="$(az ad app list --display-name "$app_name" --query "[0].appId" -o tsv 2>/dev/null || echo "")"
@@ -320,7 +327,7 @@ for env in $ENVIRONMENTS; do
   SUMMARY_LINES+=("gh variable set AZURE_SUBSCRIPTION_ID_${env_upper} --body \"${env_sub}\"")
 done
 
-# ------------------------------------------- 3. preencher os backend.tf locais
+# ------------------------------------------- 4. preencher os backend.tf locais
 
 log "Preenchendo envs/*/backend.tf"
 for env in $ENVIRONMENTS; do
