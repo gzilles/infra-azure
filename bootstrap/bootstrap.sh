@@ -29,6 +29,10 @@
 #
 set -euo pipefail
 
+# Git Bash (MSYS) converte argumentos iniciados por "/" em caminhos do Windows,
+# corrompendo escopos como "/subscriptions/..." em `az role assignment`.
+export MSYS_NO_PATHCONV=1
+
 # ---------------------------------------------------------------- configuração
 
 PREFIX="${PREFIX:-meuapp}"
@@ -109,15 +113,51 @@ subscription_for() {
   echo "${value:-$DEFAULT_SUB}"
 }
 
+STATE_SUB="${STATE_SUBSCRIPTION:-$DEFAULT_SUB}"
+
 log "Tenant: ${TENANT_ID}"
 info "Subscription padrão: ${DEFAULT_SUB}"
 info "Repositório GitHub: ${GITHUB_ORG}/${GITHUB_REPO}"
 info "Ambientes: ${ENVIRONMENTS}"
 info "Prefixo/região: ${PREFIX} / ${LOCATION_SHORT} (deve bater com terraform.tfvars)"
 
+# ------------------------------------------------ 0. resource providers
+
+REQUIRED_PROVIDERS="Microsoft.Web Microsoft.App Microsoft.DocumentDB Microsoft.Insights Microsoft.OperationalInsights"
+
+# Registra em cada subscription realmente usada (state + cada ambiente),
+# sem repetir a mesma subscription duas vezes — hoje é uma só, mas o script
+# já suporta SUBSCRIPTION_DEV/STG/PRD apontando pra subscriptions diferentes.
+subs_seen=""
+
+register_providers_in() {
+  local sub="$1" ns state
+  case " $subs_seen " in
+    *" $sub "*) return 0 ;;
+  esac
+  subs_seen="$subs_seen $sub"
+
+  log "Resource providers em ${sub}"
+  az account set --subscription "$sub"
+  for ns in $REQUIRED_PROVIDERS; do
+    state="$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo "")"
+    if [ "$state" = "Registered" ]; then
+      info "  ${ns}: já registrado"
+      continue
+    fi
+    info "  ${ns}: registrando (pode levar alguns minutos)..."
+    az provider register --namespace "$ns" --wait
+    info "  ${ns}: registrado"
+  done
+}
+
+register_providers_in "$STATE_SUB"
+for env in $ENVIRONMENTS; do
+  register_providers_in "$(subscription_for "$env")"
+done
+
 # -------------------------------------------------- 1. backend de state remoto
 
-STATE_SUB="${STATE_SUBSCRIPTION:-$DEFAULT_SUB}"
 az account set --subscription "$STATE_SUB"
 
 log "Resource group do state: ${STATE_RG}"
@@ -168,9 +208,13 @@ az storage account blob-service-properties update \
   --output none
 
 log "Criando container ${STATE_CONTAINER}"
+# --auth-mode login: sem isso, o CLI tenta buscar a chave de conta por
+# padrão. Numa reexecução, a chave já foi desabilitada (passo abaixo) e a
+# chamada é rejeitada com KeyBasedAuthenticationNotPermitted.
 az storage container create \
   --name "$STATE_CONTAINER" \
   --account-name "$STATE_SA" \
+  --auth-mode login \
   --public-access off \
   --output none
 
