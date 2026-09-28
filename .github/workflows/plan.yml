@@ -1,12 +1,19 @@
 name: terraform-plan
 
+# DESATIVADO: o tenant do Entra ID bloqueia registro de app por usuários
+# comuns (sem papel Application Developer), então as identidades OIDC do
+# bootstrap.sh não existem ainda. Rodando automaticamente, este workflow só
+# falharia no login da Azure em todo PR. Para reativar, troque o gatilho de
+# volta para o bloco `pull_request` comentado abaixo depois que o bootstrap
+# terminar de criar as identidades.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "envs/**"
-      - "modules/**"
-      - ".github/workflows/plan.yml"
+  workflow_dispatch:
+  # pull_request:
+  #   branches: [main]
+  #   paths:
+  #     - "envs/**"
+  #     - "modules/**"
+  #     - ".github/workflows/plan.yml"
 
 # id-token: exigido pelo OIDC. Sem isso a Azure recusa o login.
 permissions:

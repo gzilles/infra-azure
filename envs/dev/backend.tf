@@ -1,8 +1,8 @@
 terraform {
   # Os placeholders __*__ são preenchidos por bootstrap/bootstrap.sh.
   backend "azurerm" {
-    resource_group_name  = "__STATE_RESOURCE_GROUP__"
-    storage_account_name = "__STATE_STORAGE_ACCOUNT__"
+    resource_group_name  = "rg-tfstate-meuapp"
+    storage_account_name = "stmeuapptfstate15384"
     container_name       = "tfstate"
     key                  = "dev.terraform.tfstate"
 

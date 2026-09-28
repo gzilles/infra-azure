@@ -61,6 +61,37 @@ retry() {
   done
 }
 
+# Cria a role assignment só se ela ainda não existir, e falha ALTO se a
+# criação der erro — nunca trata "deu erro" como sinônimo de "já existia".
+# É a lição do primeiro bootstrap real: um `|| echo "já existia"` cego
+# mascarou uma falha de verdade e só apareceu como 403 no terraform init.
+ensure_role_assignment() {
+  local assignee_oid="$1" principal_type="$2" role="$3" scope="$4" label="$5"
+
+  local existing
+  existing="$(az role assignment list \
+    --assignee-object-id "$assignee_oid" \
+    --role "$role" \
+    --scope "$scope" \
+    --query "[0].id" -o tsv 2>/dev/null || echo "")"
+
+  if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+    info "  ${label}: já existia"
+    return 0
+  fi
+
+  if az role assignment create \
+    --assignee-object-id "$assignee_oid" \
+    --assignee-principal-type "$principal_type" \
+    --role "$role" \
+    --scope "$scope" \
+    --output none; then
+    info "  ${label}: concedida"
+  else
+    die "Falha ao conceder '${role}' (${label}) em ${scope}. Confira se você tem permissão para criar role assignments (Owner ou User Access Administrator)."
+  fi
+}
+
 command -v az >/dev/null || die "Azure CLI (az) não encontrada."
 command -v jq >/dev/null || die "jq não encontrado."
 az account show >/dev/null 2>&1 || die "Você não está logado. Rode 'az login' primeiro."
@@ -102,7 +133,9 @@ STATE_SA="$(az storage account list \
   --query "[?tags.purpose=='terraform-state'] | [0].name" -o tsv 2>/dev/null || echo "")"
 
 if [ -z "$STATE_SA" ] || [ "$STATE_SA" = "null" ]; then
-  suffix="$(tr -dc 'a-z0-9' </dev/urandom | head -c 5)"
+  # Evita "/dev/urandom | head -c N": head fecha o pipe cedo, tr recebe
+  # SIGPIPE, e com pipefail isso aborta o script sem imprimir nenhum erro.
+  suffix="$(printf '%05d' "$((RANDOM % 100000))")"
   short_prefix="$(echo "$PREFIX" | tr -cd 'a-z0-9' | cut -c1-10)"
   STATE_SA="st${short_prefix}tfstate${suffix}"
 
@@ -153,12 +186,7 @@ az storage account update \
 
 if [ -n "$CURRENT_USER_OID" ]; then
   info "Concedendo 'Storage Blob Data Contributor' a você mesmo (para rodar plan local)"
-  az role assignment create \
-    --assignee-object-id "$CURRENT_USER_OID" \
-    --assignee-principal-type User \
-    --role "Storage Blob Data Contributor" \
-    --scope "$STATE_SA_ID" \
-    --output none 2>/dev/null || info "  (já existia)"
+  ensure_role_assignment "$CURRENT_USER_OID" "User" "Storage Blob Data Contributor" "$STATE_SA_ID" "você mesmo"
 fi
 
 info "Aplicando lock CanNotDelete no resource group do state"
@@ -240,21 +268,8 @@ for env in $ENVIRONMENTS; do
   # RBAC: Contributor só no resource group do ambiente + acesso ao blob do state.
   # Escopado ao RG, não à subscription: a identidade de dev não enxerga prd
   # mesmo quando as duas vivem na mesma subscription.
-  info "  Contributor em ${env_rg}"
-  az role assignment create \
-    --assignee-object-id "$sp_oid" \
-    --assignee-principal-type ServicePrincipal \
-    --role "Contributor" \
-    --scope "$env_rg_id" \
-    --output none 2>/dev/null || info "  (já existia)"
-
-  info "  Storage Blob Data Contributor no state"
-  az role assignment create \
-    --assignee-object-id "$sp_oid" \
-    --assignee-principal-type ServicePrincipal \
-    --role "Storage Blob Data Contributor" \
-    --scope "$STATE_SA_ID" \
-    --output none 2>/dev/null || info "  (já existia)"
+  ensure_role_assignment "$sp_oid" "ServicePrincipal" "Contributor" "$env_rg_id" "Contributor em ${env_rg}"
+  ensure_role_assignment "$sp_oid" "ServicePrincipal" "Storage Blob Data Contributor" "$STATE_SA_ID" "acesso ao state"
 
   env_upper="$(echo "$env" | tr '[:lower:]' '[:upper:]')"
   SUMMARY_LINES+=("gh variable set AZURE_CLIENT_ID_${env_upper} --body \"${app_id}\"")

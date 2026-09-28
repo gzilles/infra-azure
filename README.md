@@ -2,6 +2,8 @@
 
 Infraestrutura da Azure como código: **Terraform + GitHub Actions**, autenticação por **OIDC** (sem secrets), state remoto no **Azure Blob Storage**, um state e uma identidade por ambiente.
 
+> **CI temporariamente desativado.** `plan.yml` e `apply.yml` estão com o gatilho automático comentado (só rodam via `workflow_dispatch`) porque o tenant do Entra ID bloqueia usuários comuns de registrar app registrations — as identidades OIDC do `bootstrap.sh` ainda não existem. Trabalhe com `terraform plan`/`apply` localmente (seção [Trabalhando localmente](#trabalhando-localmente)) até resolver isso com o TI e reativar os gatilhos.
+
 ---
 
 ## Estrutura
