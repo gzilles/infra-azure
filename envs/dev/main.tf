@@ -120,8 +120,11 @@ module "function_app" {
   deployment_container_endpoint = "${module.storage.primary_blob_endpoint}func-deploy"
   host_storage_account_name     = module.storage.name
 
-  runtime_name    = "python"
-  runtime_version = "3.13"
+  runtime_name           = "python"
+  runtime_version        = "3.13"
+  maximum_instance_count = var.function_maximum_instance_count
+  instance_memory_in_mb  = var.function_instance_memory_mb
+  http_concurrency       = var.function_http_concurrency
 
   app_settings = {
     COSMOS_ENDPOINT  = module.cosmosdb.endpoint

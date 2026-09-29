@@ -19,6 +19,7 @@ resource "azurerm_function_app_flex_consumption" "this" {
   runtime_version        = var.runtime_version
   instance_memory_in_mb  = var.instance_memory_in_mb
   maximum_instance_count = var.maximum_instance_count
+  http_concurrency       = var.http_concurrency
 
   # Pacote de deploy lido com a identidade da Function, sem chave de conta.
   storage_container_type      = "blobContainer"

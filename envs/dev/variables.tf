@@ -70,6 +70,24 @@ variable "cosmos_ip_range_filter" {
   default     = []
 }
 
+variable "function_maximum_instance_count" {
+  description = "Teto de instâncias da Function. Só limita o scale-out: no Flex não há custo por instância parada."
+  type        = number
+  default     = 1
+}
+
+variable "function_instance_memory_mb" {
+  description = "Memória por instância da Function (512, 2048 ou 4096). A de 512 MB tem só 0,25 núcleo."
+  type        = number
+  default     = 512
+}
+
+variable "function_http_concurrency" {
+  description = "Requisições HTTP simultâneas por instância da Function. null = padrão da plataforma (1 em Python)."
+  type        = number
+  default     = null
+}
+
 variable "api_auth_mode" {
   description = "Modo de autenticação da API (app setting AUTH_MODE). Veja modules/function_app."
   type        = string

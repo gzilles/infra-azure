@@ -66,6 +66,17 @@ variable "maximum_instance_count" {
   }
 }
 
+variable "http_concurrency" {
+  description = "Requisições HTTP simultâneas por instância. null = padrão da plataforma, que em Python é 1 e faz cada sobreposição abrir uma instância nova."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.http_concurrency == null || (var.http_concurrency >= 1 && var.http_concurrency <= 1000)
+    error_message = "http_concurrency deve estar entre 1 e 1000."
+  }
+}
+
 variable "app_settings" {
   description = "App settings da aplicação. Nunca coloque segredos aqui: use managed identity."
   type        = map(string)
