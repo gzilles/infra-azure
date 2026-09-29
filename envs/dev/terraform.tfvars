@@ -27,6 +27,8 @@ subnets = {
 
 storage_replication_type = "LRS"
 
+log_analytics_daily_quota_gb = 0.1
+
 tags = {
   cost_center = "TI-001"
   owner       = "plataforma@empresa.com"

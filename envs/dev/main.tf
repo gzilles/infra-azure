@@ -48,6 +48,16 @@ module "networking" {
   tags                = local.tags
 }
 
+module "monitoring" {
+  source = "../../modules/monitoring"
+
+  name_prefix         = local.name_prefix
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  daily_quota_gb      = var.log_analytics_daily_quota_gb
+  tags                = local.tags
+}
+
 module "storage" {
   source = "../../modules/storage"
 

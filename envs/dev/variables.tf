@@ -58,6 +58,12 @@ variable "storage_replication_type" {
   default     = "LRS"
 }
 
+variable "log_analytics_daily_quota_gb" {
+  description = "Limite diário de ingestão do Log Analytics, em GB. Protege o crédito: ao atingir, a telemetria para até o dia seguinte."
+  type        = number
+  default     = 0.1
+}
+
 variable "tags" {
   description = "Tags de negócio (centro de custo, dono, etc.). As tags técnicas são adicionadas automaticamente."
   type        = map(string)

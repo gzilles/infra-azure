@@ -13,6 +13,16 @@ output "subnet_ids" {
   value       = module.networking.subnet_ids
 }
 
+output "log_analytics_workspace_id" {
+  description = "ID do workspace do Log Analytics."
+  value       = module.monitoring.workspace_id
+}
+
+output "app_insights_id" {
+  description = "ID do Application Insights."
+  value       = module.monitoring.app_insights_id
+}
+
 output "storage_account_name" {
   description = "Nome da storage account da aplicação."
   value       = module.storage.name
