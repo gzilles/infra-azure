@@ -23,6 +23,21 @@ output "app_insights_id" {
   value       = module.monitoring.app_insights_id
 }
 
+output "cosmos_endpoint" {
+  description = "Endpoint do Cosmos DB."
+  value       = module.cosmosdb.endpoint
+}
+
+output "cosmos_database_name" {
+  description = "Database SQL do Cosmos DB."
+  value       = module.cosmosdb.database_name
+}
+
+output "cosmos_container_name" {
+  description = "Container SQL do Cosmos DB."
+  value       = module.cosmosdb.container_name
+}
+
 output "storage_account_name" {
   description = "Nome da storage account da aplicação."
   value       = module.storage.name

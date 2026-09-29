@@ -64,6 +64,12 @@ variable "log_analytics_daily_quota_gb" {
   default     = 0.1
 }
 
+variable "cosmos_ip_range_filter" {
+  description = "IPs públicos liberados no firewall do Cosmos. Deve ficar vazio; só recebe o IP do operador temporariamente para o seed."
+  type        = set(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Tags de negócio (centro de custo, dono, etc.). As tags técnicas são adicionadas automaticamente."
   type        = map(string)

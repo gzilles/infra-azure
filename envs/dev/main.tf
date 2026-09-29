@@ -58,6 +58,35 @@ module "monitoring" {
   tags                = local.tags
 }
 
+module "cosmosdb" {
+  source = "../../modules/cosmosdb"
+
+  name_prefix         = local.name_prefix
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  database_name       = "posture"
+  container_name      = "posture"
+  partition_key_path  = "/organizationId"
+
+  # Só a subnet da aplicação (Function) alcança o Cosmos.
+  allowed_subnet_ids = [module.networking.subnet_ids["app"]]
+  ip_range_filter    = var.cosmos_ip_range_filter
+
+  tags = local.tags
+}
+
+data "azurerm_client_config" "current" {}
+
+# Operador (quem roda o terraform) com escrita no plano de dados, só para o seed.
+# 00000000-0000-0000-0000-000000000002 = Cosmos DB Built-in Data Contributor.
+resource "azurerm_cosmosdb_sql_role_assignment" "operator_data_contributor" {
+  resource_group_name = data.azurerm_resource_group.main.name
+  account_name        = module.cosmosdb.name
+  role_definition_id  = "${module.cosmosdb.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002"
+  principal_id        = data.azurerm_client_config.current.object_id
+  scope               = module.cosmosdb.id
+}
+
 module "storage" {
   source = "../../modules/storage"
 
