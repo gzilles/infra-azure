@@ -66,10 +66,32 @@ variable "maximum_instance_count" {
   }
 }
 
+variable "http_concurrency" {
+  description = "Requisições HTTP simultâneas por instância. null = padrão da plataforma, que em Python é 1 e faz cada sobreposição abrir uma instância nova."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.http_concurrency == null || (var.http_concurrency >= 1 && var.http_concurrency <= 1000)
+    error_message = "http_concurrency deve estar entre 1 e 1000."
+  }
+}
+
 variable "app_settings" {
   description = "App settings da aplicação. Nunca coloque segredos aqui: use managed identity."
   type        = map(string)
   default     = {}
+}
+
+variable "auth_mode" {
+  description = "Vira o app setting AUTH_MODE. \"entra\" (padrão) responde 401 até o Entra ID existir; \"dev-anonymous\" aceita a organização pela query string e só pode ser usado em dev, com dados fictícios."
+  type        = string
+  default     = "entra"
+
+  validation {
+    condition     = contains(["entra", "dev-anonymous"], var.auth_mode)
+    error_message = "auth_mode deve ser 'entra' ou 'dev-anonymous'."
+  }
 }
 
 variable "app_insights_connection_string" {

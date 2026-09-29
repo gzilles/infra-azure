@@ -29,6 +29,18 @@ storage_replication_type = "LRS"
 
 log_analytics_daily_quota_gb = 0.1
 
+# Em Python, o Flex atende 1 requisição por instância por padrão: qualquer
+# sobreposição abria instância nova, e chamadas caíam em instâncias subindo ou
+# sendo desativadas (esperas de ~50 s e 503 depois de 60 s). O código só faz
+# I/O, então uma instância atende várias chamadas simultâneas.
+function_http_concurrency       = 16
+function_instance_memory_mb     = 2048
+function_maximum_instance_count = 5
+
+# SÓ EM DEV, com dados fictícios: a API aceita a organização pela query string.
+# stg e prd não definem isto e ficam no padrão "entra" (401 até o Entra ID).
+api_auth_mode = "dev-anonymous"
+
 tags = {
   cost_center = "TI-001"
   owner       = "plataforma@empresa.com"

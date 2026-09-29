@@ -19,6 +19,7 @@ resource "azurerm_function_app_flex_consumption" "this" {
   runtime_version        = var.runtime_version
   instance_memory_in_mb  = var.instance_memory_in_mb
   maximum_instance_count = var.maximum_instance_count
+  http_concurrency       = var.http_concurrency
 
   # Pacote de deploy lido com a identidade da Function, sem chave de conta.
   storage_container_type      = "blobContainer"
@@ -40,6 +41,7 @@ resource "azurerm_function_app_flex_consumption" "this" {
   # DEPLOYMENT_STORAGE_CONNECTION_STRING com a chave da conta; declarar os dois
   # vazios impede isso. O host cai no __accountName e o deploy já usa a identidade.
   app_settings = merge(var.app_settings, {
+    AUTH_MODE                            = var.auth_mode
     AzureWebJobsStorage                  = ""
     AzureWebJobsStorage__accountName     = var.host_storage_account_name
     DEPLOYMENT_STORAGE_CONNECTION_STRING = ""
