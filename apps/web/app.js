@@ -51,7 +51,8 @@
   const fmtDelta = (d) => (d > 0 ? "▲ +" + d : d < 0 ? "▼ " + d : "● 0");
   const fmtDate = (iso) => {
     const d = new Date(iso);
-    return isNaN(d) ? iso : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    // timeZone UTC: "2026-09-15" é lido como meia-noite UTC; no fuso local (ex.: UTC-3) viraria o dia anterior.
+    return isNaN(d) ? iso : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
   };
 
   // ---------- Tooltip ----------
