@@ -38,6 +38,16 @@ output "cosmos_container_name" {
   value       = module.cosmosdb.container_name
 }
 
+output "function_app_name" {
+  description = "Nome da Function App."
+  value       = module.function_app.name
+}
+
+output "api_base_url" {
+  description = "URL base da API."
+  value       = "https://${module.function_app.default_hostname}/api"
+}
+
 output "static_site_url" {
   description = "URL pública do front-end."
   value       = module.static_site.url
