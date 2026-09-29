@@ -18,6 +18,12 @@ override.tf.json
 
 # Lock file: DEVE ser commitado (não ignorar .terraform.lock.hcl)
 
+# Python
+__pycache__/
+*.pyc
+.venv*/
+venv/
+
 # Ferramentas
 .terraform.tfstate.lock.info
 .tflint.d/
