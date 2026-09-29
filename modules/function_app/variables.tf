@@ -72,6 +72,17 @@ variable "app_settings" {
   default     = {}
 }
 
+variable "auth_mode" {
+  description = "Vira o app setting AUTH_MODE. \"entra\" (padrão) responde 401 até o Entra ID existir; \"dev-anonymous\" aceita a organização pela query string e só pode ser usado em dev, com dados fictícios."
+  type        = string
+  default     = "entra"
+
+  validation {
+    condition     = contains(["entra", "dev-anonymous"], var.auth_mode)
+    error_message = "auth_mode deve ser 'entra' ou 'dev-anonymous'."
+  }
+}
+
 variable "app_insights_connection_string" {
   description = "Connection string do Application Insights."
   type        = string

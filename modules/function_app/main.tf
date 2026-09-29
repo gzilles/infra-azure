@@ -40,6 +40,7 @@ resource "azurerm_function_app_flex_consumption" "this" {
   # DEPLOYMENT_STORAGE_CONNECTION_STRING com a chave da conta; declarar os dois
   # vazios impede isso. O host cai no __accountName e o deploy já usa a identidade.
   app_settings = merge(var.app_settings, {
+    AUTH_MODE                            = var.auth_mode
     AzureWebJobsStorage                  = ""
     AzureWebJobsStorage__accountName     = var.host_storage_account_name
     DEPLOYMENT_STORAGE_CONNECTION_STRING = ""

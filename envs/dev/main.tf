@@ -129,6 +129,7 @@ module "function_app" {
     COSMOS_CONTAINER = module.cosmosdb.container_name
   }
   app_insights_connection_string = module.monitoring.app_insights_connection_string
+  auth_mode                      = var.api_auth_mode
 
   # Só o front-end pode chamar a API a partir do navegador.
   cors_allowed_origins = [trimsuffix(module.static_site.url, "/")]

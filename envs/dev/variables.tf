@@ -70,6 +70,12 @@ variable "cosmos_ip_range_filter" {
   default     = []
 }
 
+variable "api_auth_mode" {
+  description = "Modo de autenticação da API (app setting AUTH_MODE). Veja modules/function_app."
+  type        = string
+  default     = "entra"
+}
+
 variable "tags" {
   description = "Tags de negócio (centro de custo, dono, etc.). As tags técnicas são adicionadas automaticamente."
   type        = map(string)

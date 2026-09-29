@@ -29,6 +29,10 @@ storage_replication_type = "LRS"
 
 log_analytics_daily_quota_gb = 0.1
 
+# SÓ EM DEV, com dados fictícios: a API aceita a organização pela query string.
+# stg e prd não definem isto e ficam no padrão "entra" (401 até o Entra ID).
+api_auth_mode = "dev-anonymous"
+
 tags = {
   cost_center = "TI-001"
   owner       = "plataforma@empresa.com"
