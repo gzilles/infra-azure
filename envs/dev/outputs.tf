@@ -13,6 +13,51 @@ output "subnet_ids" {
   value       = module.networking.subnet_ids
 }
 
+output "log_analytics_workspace_id" {
+  description = "ID do workspace do Log Analytics."
+  value       = module.monitoring.workspace_id
+}
+
+output "app_insights_id" {
+  description = "ID do Application Insights."
+  value       = module.monitoring.app_insights_id
+}
+
+output "cosmos_endpoint" {
+  description = "Endpoint do Cosmos DB."
+  value       = module.cosmosdb.endpoint
+}
+
+output "cosmos_database_name" {
+  description = "Database SQL do Cosmos DB."
+  value       = module.cosmosdb.database_name
+}
+
+output "cosmos_container_name" {
+  description = "Container SQL do Cosmos DB."
+  value       = module.cosmosdb.container_name
+}
+
+output "function_app_name" {
+  description = "Nome da Function App."
+  value       = module.function_app.name
+}
+
+output "api_base_url" {
+  description = "URL base da API."
+  value       = "https://${module.function_app.default_hostname}/api"
+}
+
+output "static_site_url" {
+  description = "URL pública do front-end."
+  value       = module.static_site.url
+}
+
+output "static_site_storage_account_name" {
+  description = "Storage account do site (destino do upload no container $web)."
+  value       = module.static_site.name
+}
+
 output "storage_account_name" {
   description = "Nome da storage account da aplicação."
   value       = module.storage.name

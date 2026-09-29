@@ -42,10 +42,10 @@ variable "address_space" {
 
 variable "subnets" {
   description = "Subnets da VNet. Veja modules/networking para o formato."
-  type        = map(object({
+  type = map(object({
     address_prefixes  = list(string)
     service_endpoints = optional(list(string), [])
-    delegation        = optional(object({
+    delegation = optional(object({
       name    = string
       actions = optional(list(string), [])
     }))
@@ -56,6 +56,18 @@ variable "storage_replication_type" {
   description = "Replicação da storage account da aplicação."
   type        = string
   default     = "LRS"
+}
+
+variable "log_analytics_daily_quota_gb" {
+  description = "Limite diário de ingestão do Log Analytics, em GB. Protege o crédito: ao atingir, a telemetria para até o dia seguinte."
+  type        = number
+  default     = 0.1
+}
+
+variable "cosmos_ip_range_filter" {
+  description = "IPs públicos liberados no firewall do Cosmos. Deve ficar vazio; só recebe o IP do operador temporariamente para o seed."
+  type        = set(string)
+  default     = []
 }
 
 variable "tags" {

@@ -3,13 +3,14 @@
 # Bootstrap do repositório de IaC.
 #
 # Cria, de forma idempotente:
+#   0. Registro dos resource providers usados pela infra
 #   1. Resource group + storage account + container para o state remoto do Terraform
 #   2. Um resource group por ambiente (dev/stg/prd) — o Terraform passa a
 #      REFERENCIAR esses RGs via data source, nunca a criá-los ou destruí-los
-#   3. Um app registration por ambiente, com federated credentials para o GitHub Actions (OIDC)
-#   4. RBAC de cada identidade, escopado ao resource group do próprio ambiente
+#   3. Um app registration por ambiente, com federated credentials para o GitHub Actions (OIDC),
+#      e RBAC de cada identidade escopado ao resource group do próprio ambiente
 #      (não à subscription inteira) — dev não enxerga prd mesmo numa subscription única
-#   5. Preenche os placeholders em envs/*/backend.tf
+#   4. Preenche os placeholders em envs/*/backend.tf
 #
 # Rode UMA vez, com uma identidade que tenha Owner na(s) subscription(s)
 # e permissão para criar app registrations no Entra ID.
@@ -28,6 +29,10 @@
 #   ./bootstrap/bootstrap.sh
 #
 set -euo pipefail
+
+# Git Bash (MSYS) converte argumentos iniciados por "/" em caminhos do Windows,
+# corrompendo escopos como "/subscriptions/..." em `az role assignment`.
+export MSYS_NO_PATHCONV=1
 
 # ---------------------------------------------------------------- configuração
 
@@ -61,6 +66,37 @@ retry() {
   done
 }
 
+# Cria a role assignment só se ela ainda não existir, e falha ALTO se a
+# criação der erro — nunca trata "deu erro" como sinônimo de "já existia".
+# É a lição do primeiro bootstrap real: um `|| echo "já existia"` cego
+# mascarou uma falha de verdade e só apareceu como 403 no terraform init.
+ensure_role_assignment() {
+  local assignee_oid="$1" principal_type="$2" role="$3" scope="$4" label="$5"
+
+  local existing
+  existing="$(az role assignment list \
+    --assignee-object-id "$assignee_oid" \
+    --role "$role" \
+    --scope "$scope" \
+    --query "[0].id" -o tsv 2>/dev/null || echo "")"
+
+  if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+    info "  ${label}: já existia"
+    return 0
+  fi
+
+  if az role assignment create \
+    --assignee-object-id "$assignee_oid" \
+    --assignee-principal-type "$principal_type" \
+    --role "$role" \
+    --scope "$scope" \
+    --output none; then
+    info "  ${label}: concedida"
+  else
+    die "Falha ao conceder '${role}' (${label}) em ${scope}. Confira se você tem permissão para criar role assignments (Owner ou User Access Administrator)."
+  fi
+}
+
 command -v az >/dev/null || die "Azure CLI (az) não encontrada."
 command -v jq >/dev/null || die "jq não encontrado."
 az account show >/dev/null 2>&1 || die "Você não está logado. Rode 'az login' primeiro."
@@ -78,15 +114,51 @@ subscription_for() {
   echo "${value:-$DEFAULT_SUB}"
 }
 
+STATE_SUB="${STATE_SUBSCRIPTION:-$DEFAULT_SUB}"
+
 log "Tenant: ${TENANT_ID}"
 info "Subscription padrão: ${DEFAULT_SUB}"
 info "Repositório GitHub: ${GITHUB_ORG}/${GITHUB_REPO}"
 info "Ambientes: ${ENVIRONMENTS}"
 info "Prefixo/região: ${PREFIX} / ${LOCATION_SHORT} (deve bater com terraform.tfvars)"
 
+# ------------------------------------------------ 0. resource providers
+
+REQUIRED_PROVIDERS="Microsoft.Web Microsoft.App Microsoft.DocumentDB Microsoft.Insights Microsoft.OperationalInsights"
+
+# Registra em cada subscription realmente usada (state + cada ambiente),
+# sem repetir a mesma subscription duas vezes — hoje é uma só, mas o script
+# já suporta SUBSCRIPTION_DEV/STG/PRD apontando pra subscriptions diferentes.
+subs_seen=""
+
+register_providers_in() {
+  local sub="$1" ns state
+  case " $subs_seen " in
+    *" $sub "*) return 0 ;;
+  esac
+  subs_seen="$subs_seen $sub"
+
+  log "Resource providers em ${sub}"
+  az account set --subscription "$sub"
+  for ns in $REQUIRED_PROVIDERS; do
+    state="$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo "")"
+    if [ "$state" = "Registered" ]; then
+      info "  ${ns}: já registrado"
+      continue
+    fi
+    info "  ${ns}: registrando (pode levar alguns minutos)..."
+    az provider register --namespace "$ns" --wait
+    info "  ${ns}: registrado"
+  done
+}
+
+register_providers_in "$STATE_SUB"
+for env in $ENVIRONMENTS; do
+  register_providers_in "$(subscription_for "$env")"
+done
+
 # -------------------------------------------------- 1. backend de state remoto
 
-STATE_SUB="${STATE_SUBSCRIPTION:-$DEFAULT_SUB}"
 az account set --subscription "$STATE_SUB"
 
 log "Resource group do state: ${STATE_RG}"
@@ -102,7 +174,9 @@ STATE_SA="$(az storage account list \
   --query "[?tags.purpose=='terraform-state'] | [0].name" -o tsv 2>/dev/null || echo "")"
 
 if [ -z "$STATE_SA" ] || [ "$STATE_SA" = "null" ]; then
-  suffix="$(tr -dc 'a-z0-9' </dev/urandom | head -c 5)"
+  # Evita "/dev/urandom | head -c N": head fecha o pipe cedo, tr recebe
+  # SIGPIPE, e com pipefail isso aborta o script sem imprimir nenhum erro.
+  suffix="$(printf '%05d' "$((RANDOM % 100000))")"
   short_prefix="$(echo "$PREFIX" | tr -cd 'a-z0-9' | cut -c1-10)"
   STATE_SA="st${short_prefix}tfstate${suffix}"
 
@@ -135,9 +209,13 @@ az storage account blob-service-properties update \
   --output none
 
 log "Criando container ${STATE_CONTAINER}"
+# --auth-mode login: sem isso, o CLI tenta buscar a chave de conta por
+# padrão. Numa reexecução, a chave já foi desabilitada (passo abaixo) e a
+# chamada é rejeitada com KeyBasedAuthenticationNotPermitted.
 az storage container create \
   --name "$STATE_CONTAINER" \
   --account-name "$STATE_SA" \
+  --auth-mode login \
   --public-access off \
   --output none
 
@@ -153,12 +231,7 @@ az storage account update \
 
 if [ -n "$CURRENT_USER_OID" ]; then
   info "Concedendo 'Storage Blob Data Contributor' a você mesmo (para rodar plan local)"
-  az role assignment create \
-    --assignee-object-id "$CURRENT_USER_OID" \
-    --assignee-principal-type User \
-    --role "Storage Blob Data Contributor" \
-    --scope "$STATE_SA_ID" \
-    --output none 2>/dev/null || info "  (já existia)"
+  ensure_role_assignment "$CURRENT_USER_OID" "User" "Storage Blob Data Contributor" "$STATE_SA_ID" "você mesmo"
 fi
 
 info "Aplicando lock CanNotDelete no resource group do state"
@@ -168,7 +241,23 @@ az lock create \
   --resource-group "$STATE_RG" \
   --output none 2>/dev/null || warn "Não foi possível criar o lock (precisa de Owner/User Access Administrator)."
 
-# ------------------------------------- 2. identidades OIDC, uma por ambiente
+# ------------------------------------- 2. resource groups, um por ambiente
+
+# Loop separado das identidades: se o Entra ID bloquear app registrations,
+# os RGs de todos os ambientes já existem e o Terraform consegue rodar local.
+# O Terraform só REFERENCIA estes RGs (data source) — nunca cria nem destrói.
+for env in $ENVIRONMENTS; do
+  env_rg="rg-${PREFIX}-${env}-${LOCATION_SHORT}"
+  log "Resource group do ambiente '${env}': ${env_rg}"
+  az account set --subscription "$(subscription_for "$env")"
+  az group create \
+    --name "$env_rg" \
+    --location "$LOCATION" \
+    --tags managed_by=bootstrap environment="$env" application="$PREFIX" \
+    --output none
+done
+
+# ------------------------------------- 3. identidades OIDC, uma por ambiente
 
 declare -a SUMMARY_LINES=()
 
@@ -180,16 +269,6 @@ for env in $ENVIRONMENTS; do
   log "Ambiente '${env}' — identidade ${app_name} (subscription ${env_sub})"
 
   az account set --subscription "$env_sub"
-
-  # O Terraform só REFERENCIA este RG (data source) — nunca cria nem destrói.
-  # Isso também é uma trava de produção mais forte que prevent_destroy:
-  # não existe verbo `terraform destroy` para algo que o Terraform não é dono.
-  info "  Resource group: ${env_rg}"
-  az group create \
-    --name "$env_rg" \
-    --location "$LOCATION" \
-    --tags managed_by=bootstrap environment="$env" application="$PREFIX" \
-    --output none
   env_rg_id="$(az group show --name "$env_rg" --query id -o tsv)"
 
   app_id="$(az ad app list --display-name "$app_name" --query "[0].appId" -o tsv 2>/dev/null || echo "")"
@@ -240,28 +319,15 @@ for env in $ENVIRONMENTS; do
   # RBAC: Contributor só no resource group do ambiente + acesso ao blob do state.
   # Escopado ao RG, não à subscription: a identidade de dev não enxerga prd
   # mesmo quando as duas vivem na mesma subscription.
-  info "  Contributor em ${env_rg}"
-  az role assignment create \
-    --assignee-object-id "$sp_oid" \
-    --assignee-principal-type ServicePrincipal \
-    --role "Contributor" \
-    --scope "$env_rg_id" \
-    --output none 2>/dev/null || info "  (já existia)"
-
-  info "  Storage Blob Data Contributor no state"
-  az role assignment create \
-    --assignee-object-id "$sp_oid" \
-    --assignee-principal-type ServicePrincipal \
-    --role "Storage Blob Data Contributor" \
-    --scope "$STATE_SA_ID" \
-    --output none 2>/dev/null || info "  (já existia)"
+  ensure_role_assignment "$sp_oid" "ServicePrincipal" "Contributor" "$env_rg_id" "Contributor em ${env_rg}"
+  ensure_role_assignment "$sp_oid" "ServicePrincipal" "Storage Blob Data Contributor" "$STATE_SA_ID" "acesso ao state"
 
   env_upper="$(echo "$env" | tr '[:lower:]' '[:upper:]')"
   SUMMARY_LINES+=("gh variable set AZURE_CLIENT_ID_${env_upper} --body \"${app_id}\"")
   SUMMARY_LINES+=("gh variable set AZURE_SUBSCRIPTION_ID_${env_upper} --body \"${env_sub}\"")
 done
 
-# ------------------------------------------- 3. preencher os backend.tf locais
+# ------------------------------------------- 4. preencher os backend.tf locais
 
 log "Preenchendo envs/*/backend.tf"
 for env in $ENVIRONMENTS; do

@@ -2,6 +2,8 @@
 
 Infraestrutura da Azure como código: **Terraform + GitHub Actions**, autenticação por **OIDC** (sem secrets), state remoto no **Azure Blob Storage**, um state e uma identidade por ambiente.
 
+> **CI temporariamente desativado.** `plan.yml` e `apply.yml` estão com o gatilho automático comentado (só rodam via `workflow_dispatch`) porque o tenant do Entra ID bloqueia usuários comuns de registrar app registrations — as identidades OIDC do `bootstrap.sh` ainda não existem. Trabalhe com `terraform plan`/`apply` localmente (seção [Trabalhando localmente](#trabalhando-localmente)) até resolver isso com o TI e reativar os gatilhos.
+
 ---
 
 ## Estrutura
@@ -187,3 +189,6 @@ A duplicação entre os `envs/` é intencional: ela permite que produção fique
 - **`PREFIX`/`LOCATION_SHORT` do bootstrap e `application`/`location_short` do `terraform.tfvars` precisam bater exatamente.** Se divergirem, o `terraform plan` falha com "resource group não encontrado" — o data source procura um nome que o bootstrap nunca criou.
 - **`shared_access_key_enabled = false`** na storage account da aplicação. Se alguma ferramenta legada precisar de connection string, ela vai quebrar; mude a variável explicitamente em vez de contornar por fora.
 - **O `checkov` roda em modo bloqueante.** Para liberar um achado específico, use um comentário `#checkov:skip=CKV_AZURE_XX:motivo` no recurso — com o motivo escrito.
+- **O plan do dev nunca dá "No changes": sempre mostra `+ "AzureWebJobsStorage" = null` e `+ "DEPLOYMENT_STORAGE_CONNECTION_STRING" = null` na Function.** É esperado e inofensivo. O `azurerm_function_app_flex_consumption` (provider 4.x) injeta esses dois settings com a chave da storage e os esconde do state; o módulo `function_app` declara os dois vazios, o host usa a identidade (`__accountName`) e o deploy já autentica pela identidade. Todo apply reafirma o vazio. **Não use `ignore_changes` nesses settings**: um apply futuro que mexa em outro app setting pode fazer o provider reinjetar a chave. A saída definitiva é migrar o recurso para o `azapi`, ou para o provider 6.x quando o `backend_storage` sair.
+- **Chamadas recusadas por falta de function key (401) não aparecem no App Insights.** O host do Functions rejeita a chave antes da função executar e não gera telemetria de request. Isso acaba quando a API passar a validar JWT do Entra ID (`authLevel` anônimo + 401 emitido pela própria função).
+- **stg e prd precisam de `storage { data_plane_available = false }` no provider antes do primeiro apply**, como já está no dev. Sem isso, o apply falha com 403 ao ler propriedades da storage protegida por firewall.

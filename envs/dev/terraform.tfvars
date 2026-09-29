@@ -11,7 +11,13 @@ address_space = ["10.10.0.0/16"]
 
 subnets = {
   app = {
-    address_prefixes = ["10.10.1.0/24"]
+    address_prefixes  = ["10.10.1.0/24"]
+    service_endpoints = ["Microsoft.Storage", "Microsoft.AzureCosmosDB"]
+    # Exigida pela VNet integration do Functions Flex Consumption.
+    delegation = {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
   }
   data = {
     address_prefixes  = ["10.10.2.0/24"]
@@ -20,6 +26,8 @@ subnets = {
 }
 
 storage_replication_type = "LRS"
+
+log_analytics_daily_quota_gb = 0.1
 
 tags = {
   cost_center = "TI-001"

@@ -1,14 +1,20 @@
 name: terraform-apply
 
+# DESATIVADO: o tenant do Entra ID bloqueia registro de app por usuários
+# comuns (sem papel Application Developer), então as identidades OIDC do
+# bootstrap.sh não existem ainda. Rodando automaticamente, este workflow só
+# falharia no login da Azure a cada merge. Para reativar, descomente o
+# gatilho `push` abaixo depois que o bootstrap terminar de criar as
+# identidades.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "envs/**"
-      - "modules/**"
-      - ".github/workflows/apply.yml"
-      - ".github/workflows/_terraform-apply.yml"
   workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "envs/**"
+  #     - "modules/**"
+  #     - ".github/workflows/apply.yml"
+  #     - ".github/workflows/_terraform-apply.yml"
 
 # Um apply por vez no repositório inteiro; nunca cancelar no meio.
 concurrency:

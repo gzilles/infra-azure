@@ -42,10 +42,10 @@ variable "address_space" {
 
 variable "subnets" {
   description = "Subnets da VNet. Veja modules/networking para o formato."
-  type        = map(object({
+  type = map(object({
     address_prefixes  = list(string)
     service_endpoints = optional(list(string), [])
-    delegation        = optional(object({
+    delegation = optional(object({
       name    = string
       actions = optional(list(string), [])
     }))
