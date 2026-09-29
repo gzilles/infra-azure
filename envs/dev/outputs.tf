@@ -38,6 +38,16 @@ output "cosmos_container_name" {
   value       = module.cosmosdb.container_name
 }
 
+output "static_site_url" {
+  description = "URL pública do front-end."
+  value       = module.static_site.url
+}
+
+output "static_site_storage_account_name" {
+  description = "Storage account do site (destino do upload no container $web)."
+  value       = module.static_site.name
+}
+
 output "storage_account_name" {
   description = "Nome da storage account da aplicação."
   value       = module.storage.name

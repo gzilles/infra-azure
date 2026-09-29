@@ -15,6 +15,12 @@ locals {
     0,
     24
   )
+
+  static_site_storage_account_name = substr(
+    replace(lower("stweb${var.application}${var.environment}${random_string.storage_suffix.result}"), "/[^a-z0-9]/", ""),
+    0,
+    24
+  )
 }
 
 resource "random_string" "storage_suffix" {
@@ -85,6 +91,22 @@ resource "azurerm_cosmosdb_sql_role_assignment" "operator_data_contributor" {
   role_definition_id  = "${module.cosmosdb.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002"
   principal_id        = data.azurerm_client_config.current.object_id
   scope               = module.cosmosdb.id
+}
+
+module "static_site" {
+  source = "../../modules/static_site"
+
+  name                = local.static_site_storage_account_name
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  tags                = local.tags
+}
+
+# Operador publica o conteúdo do site ($web) com o próprio az login, sem chaves.
+resource "azurerm_role_assignment" "operator_static_site_contributor" {
+  scope                = module.static_site.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
 module "storage" {
