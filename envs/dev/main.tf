@@ -150,6 +150,19 @@ module "function_app" {
   tags = local.tags
 }
 
+module "security_monitoring" {
+  source = "../../modules/security_monitoring"
+
+  application                      = var.application
+  log_analytics_workspace_id       = module.monitoring.workspace_id
+  expected_cosmos_principal_ids    = [module.function_app.principal_id]
+  static_site_storage_account_name = module.static_site.name
+  host_storage_account_name        = module.storage.name
+  function_app_name                = module.function_app.name
+
+  tags = local.tags
+}
+
 # Function lê o Cosmos pelo plano de dados.
 # 00000000-0000-0000-0000-000000000001 = Cosmos DB Built-in Data Reader.
 resource "azurerm_cosmosdb_sql_role_assignment" "function_data_reader" {
