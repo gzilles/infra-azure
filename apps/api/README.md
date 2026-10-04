@@ -21,11 +21,32 @@ O formato exato de cada resposta é o de `apps/web/mock-data.js`, que também al
 
 O ponto a trocar quando o Entra ID existir é `resolve_org` em `lib/org.py`, marcado com `TODO(entra)`.
 
+## Evento de autorização: `AUTHZ`
+
+Cada decisão de autorização em `/posture` e `/controls` gera uma linha de log, que vai para a tabela `traces` do Application Insights:
+
+```
+AUTHZ {"route":"/posture","authMode":"dev-anonymous","outcome":"denied","reason":"invalid_org","org":"??????x","status":400,"ip":"203.0.113.7"}
+```
+
+| Campo | Conteúdo |
+|---|---|
+| `route` | O modelo da rota (`/indicators/{key}/controls`), nunca a URL real |
+| `outcome` | `allowed` ou `denied` |
+| `reason` | `ok`, `missing_token`, `auth_not_configured`, `invalid_org`, `unknown_org`, `invalid_key`, `unknown_indicator` |
+| `org` | O valor pedido, truncado em 40 caracteres, só com `[a-z0-9-]` (o resto vira `?`) |
+| `ip` | O IP do cliente, tirado do `X-Forwarded-For` e validado. Se não for um IP, vira `unknown`. |
+
+Token, cabeçalhos, cookies, query string e corpo nunca são registrados. A Function só repassa à lógica de autorização o IP já validado e se havia token, sem o valor dele. O teste `NoSecretsTests` chama a Function com token, cookie e query string marcados e confere que nenhum deles aparece em log algum.
+
+Falhas inesperadas (500) não são decisão de autorização e não geram evento.
+
 ## Estrutura
 
 - `function_app.py`: registra as rotas e converte o resultado em HTTP. Não contém regra de negócio.
 - `lib/posture.py`: monta as respostas no formato do contrato.
 - `lib/org.py`: resolve a organização conforme `AUTH_MODE`.
+- `lib/audit.py`: monta o evento `AUTHZ`, sanitiza o `org` e valida o IP.
 - `lib/cosmos.py`: cliente do Cosmos, reaproveitado entre invocações.
 - `lib/http.py`: erros sempre em JSON e `500` genérico, com o detalhe só no log.
 
@@ -39,4 +60,8 @@ Rodam sem Azure, com o Cosmos simulado em memória:
 python apps/api/tests/test_api.py -v
 ```
 
-Precisam de `azure-cosmos` instalado. O `requirements.txt` do seed serve.
+```bash
+python apps/api/tests/test_audit.py -v
+```
+
+Precisam de `azure-cosmos` e `azure-functions` instalados.
