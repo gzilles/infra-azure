@@ -41,6 +41,26 @@ resource "azurerm_storage_account" "this" {
   tags = var.tags
 }
 
+# Só escrita e exclusão: quem lê esta conta o tempo todo é o próprio host da
+# Function, e registrar leituras seria ruído e custo de ingestão.
+resource "azurerm_monitor_diagnostic_setting" "blob" {
+  count = var.log_analytics_workspace_id == null ? 0 : 1
+
+  # Sem log_analytics_destination_type: StorageBlobLogs já é a tabela própria
+  # do recurso, e a Azure não devolve o campo, o que gera diff perpétuo.
+  name                       = "diag-log-analytics"
+  target_resource_id         = "${azurerm_storage_account.this.id}/blobServices/default"
+  log_analytics_workspace_id = var.log_analytics_workspace_id
+
+  enabled_log {
+    category = "StorageWrite"
+  }
+
+  enabled_log {
+    category = "StorageDelete"
+  }
+}
+
 resource "azurerm_storage_container" "this" {
   for_each = toset(var.containers)
 

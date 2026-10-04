@@ -78,6 +78,8 @@ module "cosmosdb" {
   allowed_subnet_ids = [module.networking.subnet_ids["app"]]
   ip_range_filter    = var.cosmos_ip_range_filter
 
+  log_analytics_workspace_id = module.monitoring.workspace_id
+
   tags = local.tags
 }
 
@@ -99,7 +101,10 @@ module "static_site" {
   name                = local.static_site_storage_account_name
   resource_group_name = data.azurerm_resource_group.main.name
   location            = data.azurerm_resource_group.main.location
-  tags                = local.tags
+
+  log_analytics_workspace_id = module.monitoring.workspace_id
+
+  tags = local.tags
 }
 
 # Operador publica o conteúdo do site ($web) com o próprio az login, sem chaves.
@@ -137,6 +142,8 @@ module "function_app" {
   # Só o front-end pode chamar a API a partir do navegador.
   cors_allowed_origins = [trimsuffix(module.static_site.url, "/")]
 
+  log_analytics_workspace_id = module.monitoring.workspace_id
+
   tags = local.tags
 }
 
@@ -172,6 +179,8 @@ module "storage" {
     module.networking.subnet_ids["data"],
     module.networking.subnet_ids["app"],
   ]
+
+  log_analytics_workspace_id = module.monitoring.workspace_id
 
   tags = local.tags
 }

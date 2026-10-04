@@ -30,6 +30,12 @@ variable "error_404_document" {
   default     = "index.html"
 }
 
+variable "log_analytics_workspace_id" {
+  description = "Workspace do Log Analytics que recebe os logs de leitura, escrita e exclusão de blobs do site. null = nenhum diagnostic setting."
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Tags aplicadas aos recursos do módulo."
   type        = map(string)

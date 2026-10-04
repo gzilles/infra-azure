@@ -67,3 +67,19 @@ resource "azurerm_function_app_flex_consumption" "this" {
     ignore_changes = [tags["hidden-link: /app-insights-resource-id"]]
   }
 }
+
+# Logs do host do Functions, para investigação (inicializações, erros de
+# configuração, falhas de acesso a storage).
+resource "azurerm_monitor_diagnostic_setting" "this" {
+  count = var.log_analytics_workspace_id == null ? 0 : 1
+
+  # Sem log_analytics_destination_type: FunctionAppLogs já é a tabela própria
+  # do recurso, e a Azure não devolve o campo, o que gera diff perpétuo.
+  name                       = "diag-log-analytics"
+  target_resource_id         = azurerm_function_app_flex_consumption.this.id
+  log_analytics_workspace_id = var.log_analytics_workspace_id
+
+  enabled_log {
+    category = "FunctionAppLogs"
+  }
+}

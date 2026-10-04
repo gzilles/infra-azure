@@ -50,6 +50,12 @@ variable "partition_key_path" {
   }
 }
 
+variable "log_analytics_workspace_id" {
+  description = "Workspace do Log Analytics que recebe os logs de requisições (plano de dados e de controle). null = nenhum diagnostic setting."
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Tags aplicadas aos recursos do módulo."
   type        = map(string)

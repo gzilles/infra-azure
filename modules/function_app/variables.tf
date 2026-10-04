@@ -106,6 +106,12 @@ variable "cors_allowed_origins" {
   default     = []
 }
 
+variable "log_analytics_workspace_id" {
+  description = "Workspace do Log Analytics que recebe os logs do host (FunctionAppLogs). null = nenhum diagnostic setting."
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Tags aplicadas a todos os recursos do módulo."
   type        = map(string)
