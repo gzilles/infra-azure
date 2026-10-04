@@ -106,6 +106,12 @@ variable "cors_allowed_origins" {
   default     = []
 }
 
+variable "ftp_publish_basic_authentication_enabled" {
+  description = "Permite publicar por FTP com usuário e senha. null = não gerencia (fica o padrão da plataforma, que é permitir)."
+  type        = bool
+  default     = null
+}
+
 variable "log_analytics_workspace_id" {
   description = "Workspace do Log Analytics que recebe os logs do host (FunctionAppLogs). null = nenhum diagnostic setting."
   type        = string

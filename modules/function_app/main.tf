@@ -68,6 +68,23 @@ resource "azurerm_function_app_flex_consumption" "this" {
   }
 }
 
+# O azurerm só expõe a política do WebDeploy (SCM) no recurso Flex. A do FTP
+# é ajustada direto na API da Azure; o azapi mantém o valor no plan e detecta
+# se alguém religar pelo portal.
+resource "azapi_update_resource" "ftp_basic_auth" {
+  count = var.ftp_publish_basic_authentication_enabled == null ? 0 : 1
+
+  type      = "Microsoft.Web/sites/basicPublishingCredentialsPolicies@2023-12-01"
+  name      = "ftp"
+  parent_id = azurerm_function_app_flex_consumption.this.id
+
+  body = {
+    properties = {
+      allow = var.ftp_publish_basic_authentication_enabled
+    }
+  }
+}
+
 # Logs do host do Functions, para investigação (inicializações, erros de
 # configuração, falhas de acesso a storage).
 resource "azurerm_monitor_diagnostic_setting" "this" {

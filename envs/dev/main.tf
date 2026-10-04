@@ -142,6 +142,9 @@ module "function_app" {
   # Só o front-end pode chamar a API a partir do navegador.
   cors_allowed_origins = [trimsuffix(module.static_site.url, "/")]
 
+  # Deploy só com Entra ID (az login): FTP e WebDeploy com senha ficam fechados.
+  ftp_publish_basic_authentication_enabled = false
+
   log_analytics_workspace_id = module.monitoring.workspace_id
 
   tags = local.tags
