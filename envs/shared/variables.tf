@@ -13,6 +13,12 @@ variable "log_analytics_workspace_resource_group" {
   type        = string
 }
 
+variable "security_contact_emails" {
+  description = "E-mails que recebem os alertas de alta severidade do Defender for Cloud. Lista vazia = sem contato. Defina em um *.auto.tfvars (ignorado pelo Git), nunca no código."
+  type        = list(string)
+  default     = []
+}
+
 variable "activity_log_categories" {
   description = "Categorias do Activity Log exportadas para a tabela AzureActivity."
   type        = list(string)

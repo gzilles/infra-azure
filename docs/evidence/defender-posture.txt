@@ -1,0 +1,47 @@
+# Fase 7: postura no Defender for Cloud (somente leitura)
+# Levantado em 2026-11-22 com az security pricing/secure-scores/assessment e az policy state (rg-meuapp-dev-brs)
+
+## Planos do Defender
+Free: 16 planos (inclui CloudPosture = Defender CSPM pago, Storage, AppServices, CosmosDbs, Arm)
+Standard: FoundationalCspm (CSPM básico, gratuito) e Discovery (plano básico que a API só aceita como Standard)
+Nenhum plano pago habilitado. A lista de produtos consumidos da subscription não tem nenhum medidor do Defender.
+
+## Secure score
+ASC score: 8 de 12 (66,7%)
+
+## Recomendações Unhealthy (Defender, nível subscription e storage do state)
+High    Microsoft Defender CSPM should be enabled
+High    Microsoft Defender for Storage plan should be enabled with Malware Scanning and Sensitive Data Threat Detection
+High    Microsoft Defender for Resource Manager should be enabled
+High    There should be more than one owner assigned to subscriptions
+Medium  Email notification to subscription owner for high severity alerts should be enabled
+Medium  Storage accounts should restrict network access using virtual network rules   (stmeuapptfstate15384)
+Medium  Storage account should use a private link connection                          (stmeuapptfstate15384)
+Low     Email notification for high severity alerts should be enabled
+Low     Subscriptions should have a contact email address for security issues
+
+## Policy (iniciativa ASC Default) não conforme em rg-meuapp-dev-brs, última avaliação 2026-11-21
+cosmos-meuapp-dev-brs   azurecosmosdbshoulddisablepublicnetworkaccess
+cosmos-meuapp-dev-brs   cosmosdbaaccountsshoulduseprivatelink
+stmeuappdevtmfdtk       storageaccountshoulduseaprivatelinkconnectionmonitoringeffect
+stwebmeuappdevtmfdtk    storageaccountshoulduseaprivatelinkconnectionmonitoringeffect
+stwebmeuappdevtmfdtk    storageaccountsshouldrestrictnetworkaccessusingvirtualnetworkrulesmonitoringeffect
+vnet-meuapp-dev-brs     vnetenableddosprotectionmonitoring
+(18 outros estados de policy no RG estão conformes)
+
+## Decisoes (aprovadas em 2026-11-22)
+High    Defender CSPM                                   Risco aceito: plano pago (regra 2)
+High    Defender for Storage                            Risco aceito: plano pago
+High    Defender for Resource Manager                   Risco aceito: plano pago; Activity Log + consulta control-plane-security-changes cobrem parte da deteccao
+High    Mais de um dono na subscription                 Risco aceito: subscription de estudante, uso individual
+Medium  E-mail ao dono em alertas de alta severidade    CORRIGIDO via Terraform (envs/shared, azapi securityContacts 2023-12-01-preview);
+                                                        corrige tambem os dois itens Low de e-mail. E-mails em contact.auto.tfvars, fora do Git.
+Medium  State: restringir rede por VNet / private link  Risco aceito: state precisa ser alcancado pelo operador; private link tem custo.
+                                                        Compensacoes: so Entra ID, sem chave, versionamento, lock CanNotDelete.
+-       Cosmos: acesso publico / private link           Risco aceito: firewall libera so a subnet app; private link tem custo
+-       Storages do dev: private link                   Risco aceito: custo
+-       Site: restringir rede                           Fora de escopo: site publico por definicao
+-       VNet: protecao DDoS                             Fora de escopo: DDoS Network Protection ~US$ 2.900/mes
+
+Contato aplicado: emails=<2 enderecos> isEnabled=true notificationsByRole=Owner/On notificationsSources=Alert>=High
+O Defender recalcula as recomendacoes em ate 24 h; o secure score nao muda na hora.
