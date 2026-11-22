@@ -1,0 +1,20 @@
+﻿# Consulta salva: authz-injection-attempts
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:29Z  |  Linhas: 1
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   AppTraces
+#   | where Message startswith "AUTHZ "
+#   | extend e = parse_json(substring(Message, 6))
+#   | extend route = tostring(e.route), outcome = tostring(e.outcome), reason = tostring(e.reason),
+#            org = tostring(e.org), status = toint(e.status), ip = tostring(e.ip)
+#   
+#   | where TimeGenerated > ago(24h) and reason in ("invalid_org", "invalid_key")
+#   | summarize attempts = count(), reasons = make_set(reason), sample_orgs = make_set(org, 10),
+#               first_seen = min(TimeGenerated), last_seen = max(TimeGenerated) by ip
+#   | order by attempts desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+ip | attempts | reasons | sample_orgs | first_seen | last_seen
+38.252.84.x | 5 | ["invalid_org","invalid_key"] | ["??????x","org-a","???-?"] | 2026-10-04T01:21:19.9011506Z | 2026-10-04T01:39:19.4597646Z

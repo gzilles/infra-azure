@@ -1,0 +1,20 @@
+﻿# Consulta salva: storage-sharedkey-attempts
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:45Z  |  Linhas: 0
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   StorageBlobLogs
+#   | where TimeGenerated > ago(7d)
+#   | where AuthenticationType =~ "AccountKey" or StatusText has "KeyBasedAuthenticationNotPermitted"
+#   // O servi�o de change feed da pr�pria Azure grava em $blobchangefeed e
+#   // $blobchangefeedsys pelo endpoint interno (*.store.core.windows.net), inalcan��vel
+#   // pela internet. N�o filtrar por user agent: ele � controlado pelo cliente.
+#   | extend host = tostring(parse_url(Uri).Host), path = tostring(parse_url(Uri).Path)
+#   | where not(host endswith ".store.core.windows.net" and path matches regex @"^/[^/]+/[$]blobchangefeed(sys)?/")
+#   | summarize attempts = count(), operations = make_set(OperationName), statuses = make_set(StatusCode),
+#               last_seen = max(TimeGenerated) by AccountName, StatusText, CallerIpAddress
+#   | order by attempts desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+AccountName | StatusText | CallerIpAddress | attempts | operations | statuses | last_seen

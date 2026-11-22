@@ -1,0 +1,16 @@
+﻿# Consulta salva: cosmos-unexpected-principal
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:38Z  |  Linhas: 0
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   let expected = dynamic(["b9a60201-071c-494d-93a1-673dbb843871"]);
+#   CDBDataPlaneRequests
+#   | where TimeGenerated > ago(24h)
+#   | where isnotempty(AadPrincipalId) and AadPrincipalId !in (expected)
+#   | summarize requests = count(), statuses = make_set(StatusCode), operations = make_set(OperationName),
+#               last_seen = max(TimeGenerated) by AadPrincipalId, ClientIpAddress
+#   | order by requests desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+AadPrincipalId | ClientIpAddress | requests | statuses | operations | last_seen

@@ -38,6 +38,25 @@ resource "azurerm_cosmosdb_account" "this" {
   tags = var.tags
 }
 
+# Requisições de dados (403 de firewall/RBAC, principal inesperado) e de
+# controle (mudanças de configuração). "Dedicated" grava nas tabelas CDB*.
+resource "azurerm_monitor_diagnostic_setting" "this" {
+  count = var.log_analytics_workspace_id == null ? 0 : 1
+
+  name                           = "diag-log-analytics"
+  target_resource_id             = azurerm_cosmosdb_account.this.id
+  log_analytics_workspace_id     = var.log_analytics_workspace_id
+  log_analytics_destination_type = "Dedicated"
+
+  enabled_log {
+    category = "DataPlaneRequests"
+  }
+
+  enabled_log {
+    category = "ControlPlaneRequests"
+  }
+}
+
 resource "azurerm_cosmosdb_sql_database" "this" {
   name                = var.database_name
   resource_group_name = var.resource_group_name

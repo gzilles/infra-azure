@@ -1,0 +1,11 @@
+﻿# Cenario 2: enumeracao de organizacoes (org-a ... org-j)
+01:39:19 GET /api/posture?org=org-a -> 200
+01:39:19 GET /api/posture?org=org-b -> 200
+01:39:19 GET /api/posture?org=org-c -> 404
+01:39:19 GET /api/posture?org=org-d -> 404
+01:39:19 GET /api/posture?org=org-e -> 404
+01:39:19 GET /api/posture?org=org-f -> 404
+01:39:19 GET /api/posture?org=org-g -> 404
+01:39:19 GET /api/posture?org=org-h -> 404
+01:39:19 GET /api/posture?org=org-i -> 404
+01:39:19 GET /api/posture?org=org-j -> 404

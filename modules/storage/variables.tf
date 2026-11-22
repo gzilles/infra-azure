@@ -92,6 +92,12 @@ variable "containers" {
   default     = []
 }
 
+variable "log_analytics_workspace_id" {
+  description = "Workspace do Log Analytics que recebe os logs de escrita e exclusão de blobs. null = nenhum diagnostic setting."
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Tags aplicadas aos recursos do módulo."
   type        = map(string)

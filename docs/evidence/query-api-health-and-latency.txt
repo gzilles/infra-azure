@@ -1,0 +1,19 @@
+﻿# Consulta salva: api-health-and-latency
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:24Z  |  Linhas: 3
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   AppRequests
+#   | where TimeGenerated > ago(24h)
+#   | summarize requests = count(), errors_5xx = countif(toint(ResultCode) >= 500),
+#               client_errors_4xx = countif(toint(ResultCode) between (400 .. 499)),
+#               p95_ms = round(percentile(DurationMs, 95), 1) by Name
+#   | extend error_rate_pct = round(100.0 * errors_5xx / requests, 2)
+#   | order by requests desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+Name | requests | errors_5xx | client_errors_4xx | p95_ms | error_rate_pct
+posture | 27 | 0 | 13 | 858.2 | 0
+controls | 12 | 0 | 4 | 227.9 | 0
+health | 5 | 0 | 0 | 622.3 | 0

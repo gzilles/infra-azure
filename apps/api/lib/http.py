@@ -5,10 +5,13 @@ HEADERS = {"Cache-Control": "no-store"}
 
 
 class HttpError(Exception):
-    def __init__(self, status: int, message: str):
+    """Erro com status HTTP. `reason` marca as negações de autorização."""
+
+    def __init__(self, status: int, message: str, reason: str | None = None):
         super().__init__(message)
         self.status = status
         self.message = message
+        self.reason = reason
 
 
 def dispatch(handler: Callable[[], tuple[int, dict]]) -> tuple[int, dict]:

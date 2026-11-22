@@ -22,6 +22,30 @@ resource "azurerm_storage_account" "this" {
   tags = var.tags
 }
 
+# Escrita e exclusão detectam alteração do site ($web); leitura mostra o
+# acesso e tentativas com chave compartilhada também nos GETs.
+resource "azurerm_monitor_diagnostic_setting" "blob" {
+  count = var.log_analytics_workspace_id == null ? 0 : 1
+
+  # Sem log_analytics_destination_type: StorageBlobLogs já é a tabela própria
+  # do recurso, e a Azure não devolve o campo, o que gera diff perpétuo.
+  name                       = "diag-log-analytics"
+  target_resource_id         = "${azurerm_storage_account.this.id}/blobServices/default"
+  log_analytics_workspace_id = var.log_analytics_workspace_id
+
+  enabled_log {
+    category = "StorageRead"
+  }
+
+  enabled_log {
+    category = "StorageWrite"
+  }
+
+  enabled_log {
+    category = "StorageDelete"
+  }
+}
+
 resource "azurerm_storage_account_static_website" "this" {
   storage_account_id = azurerm_storage_account.this.id
   index_document     = var.index_document

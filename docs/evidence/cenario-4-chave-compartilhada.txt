@@ -1,0 +1,2 @@
+﻿# Cenario 4: az storage blob list no $web com --account-key aleatoria (chave inventada)
+01:39:44 resultado: az : ERROR:  |     + CategoryInfo          : NotSpecified: (ERROR: :String) [], RemoteException |     + FullyQualifiedErrorId : NativeCommandError
