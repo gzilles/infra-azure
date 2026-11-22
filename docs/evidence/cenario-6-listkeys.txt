@@ -1,0 +1,11 @@
+﻿# Cenario 6: az cosmosdb keys list (saida descartada com -o none; as chaves nao foram exibidas nem salvas)
+# A conta tem autenticacao local desabilitada (disableLocalAuth=true); as chaves nao dao acesso aos dados.
+
+## Execucao original: 2026-10-04 01:40:21 UTC
+Registrada no Activity Log da Azure (az monitor activity-log list) como Microsoft.DocumentDB/databaseAccounts/listKeys/action,
+mas nunca entregue ao workspace: todos os eventos administrativos da subscription entre ~01:05 e ~02:00 UTC daquela noite
+(incluindo as 11 gravacoes de consultas salvas) se perderam na exportacao do Activity Log. A exportacao seguiu funcionando nos dias seguintes.
+
+## Repeticao: 2026-11-22T02:28:53Z
+Mesmo comando. Evento ingerido no workspace em ~4 min e visivel na consulta salva control-plane-security-changes
+(ver query-control-plane-security-changes.txt).

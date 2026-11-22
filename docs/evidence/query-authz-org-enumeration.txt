@@ -1,0 +1,21 @@
+﻿# Consulta salva: authz-org-enumeration
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:31Z  |  Linhas: 1
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   AppTraces
+#   | where Message startswith "AUTHZ "
+#   | extend e = parse_json(substring(Message, 6))
+#   | extend route = tostring(e.route), outcome = tostring(e.outcome), reason = tostring(e.reason),
+#            org = tostring(e.org), status = toint(e.status), ip = tostring(e.ip)
+#   
+#   | where TimeGenerated > ago(1h)
+#   | summarize orgs = dcount(org), sample_orgs = make_set(org, 20), requests = count(),
+#               denied = countif(outcome == "denied") by ip
+#   | where orgs > 3
+#   | order by orgs desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+ip | orgs | sample_orgs | requests | denied
+38.252.84.x | 14 | ["org-a","??????x","org-zzz","???-?","org-inexistente","org-b","org-c","org-d","org-e","org-f","org-g","org-h","org-i","org-j"] | 21 | 17

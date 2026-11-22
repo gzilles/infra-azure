@@ -1,0 +1,36 @@
+﻿# Consulta salva: log-ingestion-and-cap
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:43Z  |  Linhas: 16
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   let ingestion = Usage
+#       | where TimeGenerated > ago(30d)
+#       | summarize MB = round(sum(Quantity), 3) by Day = startofday(TimeGenerated), DataType
+#       | extend Event = "";
+#   let cap = _LogOperation
+#       | where TimeGenerated > ago(30d)
+#       | where Category =~ "Ingestion" or Detail has_any ("quota", "cap")
+#       | project Day = startofday(TimeGenerated), DataType = "_LogOperation", MB = real(null),
+#                 Event = strcat(Operation, ": ", Detail);
+#   union ingestion, cap
+#   | order by Day desc, MB desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+Day | DataType | MB | Event
+2026-10-04T00:00:00Z | StorageBlobLogs | 0.001 | 
+2026-10-02T00:00:00Z | AppTraces | 0.122 | 
+2026-10-02T00:00:00Z | AppMetrics | 0.025 | 
+2026-10-02T00:00:00Z | AppExceptions | 0.023 | 
+2026-10-02T00:00:00Z | AppPerformanceCounters | 0.009 | 
+2026-10-02T00:00:00Z | AppRequests | 0.005 | 
+2026-10-01T00:00:00Z | AppTraces | 0.171 | 
+2026-10-01T00:00:00Z | AppRequests | 0.016 | 
+2026-10-01T00:00:00Z | AppMetrics | 0.016 | 
+2026-10-01T00:00:00Z | AppPerformanceCounters | 0.005 | 
+2026-09-30T00:00:00Z | AppSystemEvents | 0.005 | 
+2026-09-29T00:00:00Z | AppTraces | 3.337 | 
+2026-09-29T00:00:00Z | AppMetrics | 0.909 | 
+2026-09-29T00:00:00Z | AppExceptions | 0.321 | 
+2026-09-29T00:00:00Z | AppRequests | 0.28 | 
+2026-09-29T00:00:00Z | AppPerformanceCounters | 0.279 | 

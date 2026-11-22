@@ -1,0 +1,7 @@
+﻿# Cenario 1: negacoes na API
+# org invalida, org inexistente e key com payload de injecao
+01:39:18 GET /api/posture?org=../../x -> 400
+01:39:18 GET /api/posture?org=ORG-A -> 400
+01:39:18 GET /api/posture?org=org-inexistente -> 404
+01:39:18 GET /api/indicators/vuln-mgmt%27%20OR%201%3D1%20--/controls?org=org-a -> 400
+01:39:19 GET /api/indicators/nao-existe/controls?org=org-a -> 404

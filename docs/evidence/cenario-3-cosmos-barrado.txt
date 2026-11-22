@@ -1,0 +1,2 @@
+﻿# Cenario 3: leitura direta do Cosmos da maquina do operador (DefaultAzureCredential)
+01:40:01 seed.py --check -> azure.cosmos.exceptions.CosmosHttpResponseError: (Forbidden) Request originated from IP 38.252.84.x through public internet. This is blocked by your Cosmos DB account firewall settings. More info: https://aka.ms/cosmosdb-tsg-forbidden

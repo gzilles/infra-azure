@@ -1,0 +1,34 @@
+﻿# Consulta salva: function-deployments
+# Categoria: Security - meuapp
+# Executada em: 2026-11-22T02:36:14Z  |  Linhas: 9
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   // O deploy do Flex (config-zip) n�o passa pelo ARM: o sinal � a escrita do pacote
+#   // no container de deploy. Mudan�as de configura��o e rein�cios v�m do AzureActivity.
+#   let package_writes = StorageBlobLogs
+#       | where TimeGenerated > ago(30d)
+#       | where AccountName == "stmeuappdevtmfdtk" and OperationName == "PutBlob"
+#       | where tostring(parse_url(Uri).Path) startswith "/func-deploy/"
+#       | project TimeGenerated, Source = "package", Operation = OperationName, Who = RequesterObjectId,
+#                 Detail = tostring(parse_url(Uri).Path);
+#   let arm_changes = AzureActivity
+#       | where TimeGenerated > ago(30d)
+#       | where _ResourceId has "/sites/func-meuapp-dev-brs"
+#       | where OperationNameValue matches regex @"(?i)sites/(write|restart/action|syncfunctiontriggers/action|config/write|basicpublishingcredentialspolicies/write)"
+#       | project TimeGenerated, Source = "arm", Operation = OperationNameValue, Who = Caller,
+#                 Detail = ActivityStatusValue;
+#   union package_writes, arm_changes
+#   | order by TimeGenerated desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+TimeGenerated | Source | Operation | Who | Detail
+2026-11-22T02:34:40.7781594Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/kudu-state-7affef37a2f2c052d6509431776dd592f9b16f4cdf0fba6b292151c4c63b88ff.json
+2026-11-22T02:34:40.6616985Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/kudu-state-7affef37a2f2c052d6509431776dd592f9b16f4cdf0fba6b292151c4c63b88ff.json
+2026-11-22T02:34:34.9324416Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/kudu-state-7affef37a2f2c052d6509431776dd592f9b16f4cdf0fba6b292151c4c63b88ff.json
+2026-11-22T02:34:34.8672007Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/kudu-state-7affef37a2f2c052d6509431776dd592f9b16f4cdf0fba6b292151c4c63b88ff.json
+2026-11-22T02:34:34.8436617Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/kudu-state-7affef37a2f2c052d6509431776dd592f9b16f4cdf0fba6b292151c4c63b88ff.json
+2026-11-22T02:34:34.8222641Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/c2c88877-446c-4e8d-877a-0968401a6921.zip
+2026-11-22T02:34:22.4997918Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/DeploymentTemporaryFiles/7affef37a2f2c052d6509431776dd592f9b16f4cdf0fba6b292151c4c63b88ff/StorageAccessCheck.txt
+2026-11-22T02:34:22.4528791Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/kudu-state-7affef37a2f2c052d6509431776dd592f9b16f4cdf0fba6b292151c4c63b88ff.json
+2026-11-22T02:34:22.3994309Z | package | PutBlob | b9a60201-071c-494d-93a1-673dbb843871 | /func-deploy/DeploymentTemporaryFiles/7affef37a2f2c052d6509431776dd592f9b16f4cdf0fba6b292151c4c63b88ff/c2c88877-446c-4e8d-877a-0968401a6921_source.zip

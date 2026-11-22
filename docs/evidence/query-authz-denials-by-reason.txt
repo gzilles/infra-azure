@@ -1,0 +1,22 @@
+﻿# Consulta salva: authz-denials-by-reason
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:26Z  |  Linhas: 4
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   AppTraces
+#   | where Message startswith "AUTHZ "
+#   | extend e = parse_json(substring(Message, 6))
+#   | extend route = tostring(e.route), outcome = tostring(e.outcome), reason = tostring(e.reason),
+#            org = tostring(e.org), status = toint(e.status), ip = tostring(e.ip)
+#   
+#   | where TimeGenerated > ago(1h) and outcome == "denied"
+#   | summarize denials = count(), first_seen = min(TimeGenerated), last_seen = max(TimeGenerated) by reason, route, ip
+#   | order by denials desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+reason | route | ip | denials | first_seen | last_seen
+unknown_org | /posture | 38.252.84.x | 10 | 2026-10-04T01:21:20.0081561Z | 2026-10-04T01:39:20.228408Z
+invalid_org | /posture | 38.252.84.x | 3 | 2026-10-04T01:21:19.9011506Z | 2026-10-04T01:39:18.6516208Z
+unknown_indicator | /indicators/{key}/controls | 38.252.84.x | 2 | 2026-10-04T01:21:20.2632486Z | 2026-10-04T01:39:19.5496925Z
+invalid_key | /indicators/{key}/controls | 38.252.84.x | 2 | 2026-10-04T01:21:20.2996488Z | 2026-10-04T01:39:19.4597646Z

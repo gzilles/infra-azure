@@ -1,0 +1,9 @@
+﻿# Cenario 7: redeploy da API com az functionapp deployment source config-zip (Entra ID / az login)
+01:42:40 deploy: 
+OK
+ | status=4 (4 = sucesso) ativo=True fim=2026-10-04T01:41:37.520089Z
+01:42:43 /api/health depois do deploy -> 200
+
+## Repeticao: 2026-11-22T02:34:04Z
+Redeploy do mesmo codigo com config-zip (az login). A evidencia de outubro na consulta function-deployments
+foi sobrescrita por engano depois de sair da retencao de 30 dias de StorageBlobLogs; esta repeticao a regenera.

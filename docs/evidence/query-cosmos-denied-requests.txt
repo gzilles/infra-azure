@@ -1,0 +1,15 @@
+﻿# Consulta salva: cosmos-denied-requests
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:35Z  |  Linhas: 1
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   CDBDataPlaneRequests
+#   | where TimeGenerated > ago(24h) and StatusCode == 403
+#   | summarize requests = count(), operations = make_set(OperationName), last_seen = max(TimeGenerated)
+#               by ClientIpAddress, AadPrincipalId
+#   | order by requests desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+ClientIpAddress | AadPrincipalId | requests | operations | last_seen
+38.252.84.x |  | 8 | ["Read"] | 2026-10-04T01:40:05.6474652Z

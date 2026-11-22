@@ -1,0 +1,17 @@
+﻿# Consulta salva: control-plane-security-changes
+# Categoria: Security - meuapp
+# Executada em: 2026-11-22T02:33:33Z  |  Linhas: 2
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   AzureActivity
+#   | where TimeGenerated > ago(7d)
+#   | where OperationNameValue matches regex @"(?i)(roleassignments/(write|delete)|/listkeys/action|regeneratekey|networkrulesets|privateendpointconnections|diagnosticsettings/delete|basicpublishingcredentialspolicies/write|databaseaccounts/write|storageaccounts/write)"
+#   | project TimeGenerated, OperationNameValue, ActivityStatusValue, Caller, CallerIpAddress, ResourceGroup,
+#             Resource = tostring(split(_ResourceId, "/")[-1])
+#   | order by TimeGenerated desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+TimeGenerated | OperationNameValue | ActivityStatusValue | Caller | CallerIpAddress | ResourceGroup | Resource
+2026-11-22T02:28:54.7166898Z | MICROSOFT.DOCUMENTDB/DATABASEACCOUNTS/LISTKEYS/ACTION | Success | GZILLES@edu.unisinos.br | 38.252.84.x | RG-MEUAPP-DEV-BRS | cosmos-meuapp-dev-brs
+2026-11-22T02:28:54.6698096Z | MICROSOFT.DOCUMENTDB/DATABASEACCOUNTS/LISTKEYS/ACTION | Start | GZILLES@edu.unisinos.br | 38.252.84.x | RG-MEUAPP-DEV-BRS | cosmos-meuapp-dev-brs

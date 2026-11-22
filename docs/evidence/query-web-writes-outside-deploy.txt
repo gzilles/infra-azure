@@ -1,0 +1,17 @@
+﻿# Consulta salva: web-writes-outside-deploy
+# Categoria: Security - meuapp
+# Executada em: 2026-10-04T02:13:47Z  |  Linhas: 2
+#
+# KQL (exatamente como estÃ¡ salva no workspace):
+#   StorageBlobLogs
+#   | where TimeGenerated > ago(7d)
+#   | where AccountName == "stwebmeuappdevtmfdtk" and Category in ("StorageWrite", "StorageDelete")
+#   | project TimeGenerated, OperationName, StatusCode, AuthenticationType, RequesterUpn, RequesterObjectId,
+#             CallerIpAddress, Uri
+#   | order by TimeGenerated desc
+#   
+
+# Resultado (colunas separadas por ' | '):
+TimeGenerated | OperationName | StatusCode | AuthenticationType | RequesterUpn | RequesterObjectId | CallerIpAddress | Uri
+2026-10-04T01:39:47.6758037Z | DeleteBlob | 202 | OAuth | GZILLES@edu.unisinos.br | 24cd11ba-bb1e-45e1-8564-02cfcf440a56 | 38.252.84.x:27076 | https://stwebmeuappdevtmfdtk.blob.core.windows.net:443/%24web/evidence-test.txt
+2026-10-04T01:39:46.3606825Z | PutBlob | 201 | OAuth | GZILLES@edu.unisinos.br | 24cd11ba-bb1e-45e1-8564-02cfcf440a56 | 38.252.84.x:26459 | https://stwebmeuappdevtmfdtk.blob.core.windows.net:443/%24web/evidence-test.txt
