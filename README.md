@@ -98,7 +98,7 @@ pip install -r apps/api/requirements.txt
 python -m unittest discover -s apps/api/tests -v
 ```
 
-On Windows (PowerShell), create the environment with `python -m venv .venv` and activate it with `.venv\Scripts\Activate.ps1`. The 25 tests run against an in-memory Cosmos DB: they check the API's responses against `apps/web/mock-data.js`, input validation, the `AUTHZ` event and that no token or header ever reaches the logs.
+On Windows (PowerShell), create the environment with `python -m venv .venv` and activate it with `.venv\Scripts\Activate.ps1`. If PowerShell refuses to run the script, allow it for the current window only with `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` and activate again. The 25 tests run against an in-memory Cosmos DB: they check the API's responses against `apps/web/mock-data.js`, input validation, the `AUTHZ` event and that no token or header ever reaches the logs.
 
 #### 3b. Infrastructure
 
