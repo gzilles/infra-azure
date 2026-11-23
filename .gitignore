@@ -24,6 +24,9 @@ __pycache__/
 .venv*/
 venv/
 
+# Azure Functions: configuração local (copiada de local.settings.sample.json)
+local.settings.json
+
 # Ferramentas
 .terraform.tfstate.lock.info
 .tflint.d/
@@ -31,6 +34,7 @@ venv/
 
 # Editores / SO
 .vscode/
+.vs/
 .idea/
 .DS_Store
 Thumbs.db

@@ -1,194 +1,165 @@
-# infra-azure
+# Security Posture Dashboard
 
-Infraestrutura da Azure como código: **Terraform + GitHub Actions**, autenticação por **OIDC** (sem secrets), state remoto no **Azure Blob Storage**, um state e uma identidade por ambiente.
+A read-only web dashboard that answers one question for an organization: **where do we stand on information security?** It shows one consolidated security score, five indicators and the controls behind each one, for the organization the user belongs to. Everything runs on Microsoft Azure and is provisioned with Terraform.
 
-> **CI temporariamente desativado.** `plan.yml` e `apply.yml` estão com o gatilho automático comentado (só rodam via `workflow_dispatch`) porque o tenant do Entra ID bloqueia usuários comuns de registrar app registrations — as identidades OIDC do `bootstrap.sh` ainda não existem. Trabalhe com `terraform plan`/`apply` localmente (seção [Trabalhando localmente](#trabalhando-localmente)) até resolver isso com o TI e reativar os gatilhos.
+## 1. Overview
 
----
+**Business problem.** Security evidence is scattered across scanners, spreadsheets, audits and tickets, so the person who reports to the board rebuilds the organization's posture by hand every week, and the sources disagree. This dashboard gives that person one score and five indicators for their own organization, with a drill-down into the overdue controls that explain a falling indicator.
 
-## Estrutura
+**Group.** Gustavo Zilles, Vinicius Mello, Renan Metzen, Rodrigo Cassel. Trending Information Technologies, Unisinos, 2026/2.
+
+**Grau B presentation.** [docs/slides/grau-b-implementation.pdf](docs/slides/grau-b-implementation.pdf)
+
+## 2. Architecture
+
+![Deployment diagram](docs/architecture.png)
+
+| Service | Role |
+|---|---|
+| **Azure Storage (static website)** | Serves the dashboard's HTML, CSS and JavaScript over HTTPS. Shared-key access is disabled. |
+| **Azure Functions (Flex Consumption)** | The Posture API, in Python: three read-only endpoints. Runs inside the VNet and reaches the database with its managed identity. |
+| **Azure Cosmos DB (serverless)** | Stores the posture data, one partition per organization (`/organizationId`). Key authentication is off and the firewall admits only the API's subnet. |
+| **Application Insights + Log Analytics** | Requests, errors, an `AUTHZ` event per access decision, and the security logs of every other service, with saved queries for review. |
+| **Microsoft Entra ID** | Planned user sign-in (OIDC + PKCE). Not active yet: the university tenant blocks app registrations (see [Known limitations](#6-known-limitations)). |
+
+All resources live in `rg-meuapp-dev-brs` (Brazil South) in an Azure for Students subscription.
+
+## 3. Repository layout
 
 ```
 .
-├── .github/workflows/
-│   ├── plan.yml                  # PR: fmt, tflint, checkov, plan nos 3 ambientes
-│   ├── apply.yml                 # main: dev -> stg -> prd, em cadeia
-│   └── _terraform-apply.yml      # workflow reutilizável: plan -> aprovação -> apply
-├── bootstrap/
-│   └── bootstrap.sh              # roda UMA vez: cria state remoto + identidades OIDC
-├── modules/                      # blocos reutilizáveis, sem valor hardcoded
-│   ├── networking/               # VNet + subnets + um NSG por subnet
-│   └── storage/                  # storage account com padrões seguros
+├── apps/
+│   ├── web/          Dashboard: vanilla HTML/CSS/JS, no build step; mock-data.js holds the sample data
+│   └── api/          Posture API: Azure Functions in Python, with unit tests in tests/
+├── scripts/seed/     Loads the sample data from apps/web/mock-data.js into Cosmos DB
+├── modules/          Terraform modules: networking, storage, static_site, cosmosdb, function_app, monitoring, security_monitoring
 ├── envs/
-│   ├── dev/                      # state próprio, resource group próprio, identidade própria
-│   ├── stg/
-│   └── prd/
-├── .tflint.hcl
-└── .pre-commit-config.yaml
+│   ├── dev/          Terraform root of the deployed environment
+│   ├── stg/ prd/     Terraform roots of the other environments (planned, not deployed)
+│   └── shared/       Subscription-level settings: Activity Log export, Defender security contact
+├── bootstrap/        One-time script: remote Terraform state, resource groups, resource providers
+├── docs/             Slides, architecture diagram, security monitoring and evidence, infrastructure guide
+└── .github/          CI workflows (disabled until Entra ID app registrations are available)
 ```
 
-Cada ambiente é um diretório raiz independente com o **seu próprio state**. Um erro em `dev` não tem como alcançar `prd`.
+## 4. How to evaluate
 
-O isolamento entre ambientes não depende de subscriptions separadas. O `resource group` de cada ambiente é criado pelo `bootstrap.sh` — o Terraform só o **referencia** via `data source`, nunca cria nem destrói — e cada identidade de CI recebe `Contributor` apenas no RG do seu próprio ambiente. Mesmo com os três ambientes numa única subscription (caso comum em conta pessoal/Azure for Students), a identidade de `dev` não tem permissão para tocar em `prd`.
+Three paths, from quickest to most complete. **Paths 1 and 2 are the recommended ones**: path 3 needs access to the Azure subscription.
 
----
+### Path 1: live on Azure
 
-## Setup — do zero até o primeiro apply
-
-### 1. Criar o repositório no GitHub
+- Dashboard: **https://stwebmeuappdevtmfdtk.z15.web.core.windows.net/**
+  Switch between Organization A and Organization B in the yellow bar. Click an indicator to see its controls.
+- API base URL: **https://func-meuapp-dev-brs.azurewebsites.net/api**
 
 ```bash
-gh repo create minha-org/infra-azure --private --source=. --remote=origin
+curl https://func-meuapp-dev-brs.azurewebsites.net/api/health
 ```
-
-### 2. Rodar o bootstrap
-
-O `bootstrap.sh` precisa de uma identidade com **Owner** na(s) subscription(s) e permissão para criar app registrations no Entra ID. Rode no Git Bash, WSL ou no Azure Cloud Shell.
 
 ```bash
-az login
+curl "https://func-meuapp-dev-brs.azurewebsites.net/api/posture?org=org-a"
 ```
-
-Depois exporte a configuração e execute. Se você tem uma subscription só (caso comum em conta pessoal/Azure for Students), não defina `SUBSCRIPTION_DEV`/`_STG`/`_PRD` — todos os ambientes caem na subscription atual:
 
 ```bash
-GITHUB_ORG=minha-org GITHUB_REPO=infra-azure PREFIX=meuapp ./bootstrap/bootstrap.sh
+curl "https://func-meuapp-dev-brs.azurewebsites.net/api/indicators/vuln-mgmt/controls?org=org-a"
 ```
 
-`PREFIX` (e, se você mudar o padrão, `LOCATION_SHORT`) precisam ser **idênticos** ao `application`/`location_short` que você vai colocar em cada `envs/*/terraform.tfvars` — é essa combinação que forma o nome do resource group que o Terraform espera encontrar.
-
-O que ele faz:
-
-| Etapa | Resultado |
-|---|---|
-| Resource group + storage account do state | State remoto com versionamento, soft delete de 30 dias e lock `CanNotDelete` |
-| Desabilita shared key no state | O state só é acessível por Entra ID / RBAC |
-| 1 resource group por ambiente | `rg-meuapp-dev-brs`, `rg-meuapp-stg-brs`, `rg-meuapp-prd-brs` — o Terraform só os lê |
-| 1 app registration por ambiente | `gh-meuapp-dev`, `gh-meuapp-stg`, `gh-meuapp-prd` |
-| 3 federated credentials por app | `pull_request`, `ref:refs/heads/main`, `environment:<env>` |
-| RBAC | `Contributor` **só no RG do próprio ambiente** + `Storage Blob Data Contributor` no state |
-| Patch nos `backend.tf` | Preenche os placeholders `__STATE_*__` |
-
-No fim ele imprime os comandos `gh variable set` já preenchidos.
-
-### 3. Registrar as variáveis no GitHub
-
-São **repository variables**, não secrets — nenhum desses valores é sigiloso (o segredo é a confiança federada, não o ID):
-
-- `AZURE_TENANT_ID`
-- `AZURE_CLIENT_ID_DEV` / `_STG` / `_PRD`
-- `AZURE_SUBSCRIPTION_ID_DEV` / `_STG` / `_PRD`
-
-### 4. Criar os GitHub Environments
-
-Em **Settings → Environments**, crie `dev`, `stg` e `prd`. Em `stg` e `prd`, ligue **Required reviewers**. É esse gate — e só ele — que segura o `apply`.
-
-### 5. Ajustar os `terraform.tfvars`
-
-Troque `subscription_id`, `application`, `cost_center` e `owner` em cada `envs/*/terraform.tfvars`.
-
-### 6. Commit e PR
+An invalid organization returns `400` and a missing one returns `404`:
 
 ```bash
-git switch -c setup/infra-inicial
+curl "https://func-meuapp-dev-brs.azurewebsites.net/api/posture?org=../../x"
 ```
 
-Abra o PR: o workflow de plan comenta o `terraform plan` dos três ambientes direto no PR.
+### Path 2: without Azure
 
----
+Serves the dashboard on your machine with the sample data. Needs only Python 3.
 
-## Como o CI funciona
-
-**No PR** (`plan.yml`)
-
-```
-fmt -check → tflint → checkov → plan (dev, stg, prd em paralelo) → comentário no PR
+```bash
+cd apps/web
+python3 -m http.server 8080
 ```
 
-O comentário é atualizado no lugar a cada push, em vez de acumular.
+On Windows, use `python` instead of `python3`. Then open **http://localhost:8080/?mock=1**.
 
-**No merge para `main`** (`apply.yml`)
+`?mock=1` is required: without it the page calls the live API, which only accepts requests from the dashboard's own address (CORS), so it fails from `localhost`.
 
+### Path 3: full stack
+
+**Prerequisites:** Git, Python 3.13, Terraform 1.9+, Azure CLI, Azure Functions Core Tools v4.
+
+#### 3a. API unit tests (no Azure needed)
+
+From the repository root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r apps/api/requirements.txt
+python -m unittest discover -s apps/api/tests -v
 ```
-dev: plan → [aprovação] → apply
-      ↓
-stg: plan → [aprovação] → apply
-      ↓
-prd: plan → [aprovação] → apply
-```
 
-Dois detalhes que importam:
+On Windows (PowerShell), create the environment with `python -m venv .venv` and activate it with `.venv\Scripts\Activate.ps1`. The 25 tests run against an in-memory Cosmos DB: they check the API's responses against `apps/web/mock-data.js`, input validation, the `AUTHZ` event and that no token or header ever reaches the logs.
 
-- O `apply` recebe **o arquivo de plan** gerado no job anterior, baixado como artefato. O que foi revisado é exatamente o que vai para a Azure — não um plan recalculado que pode ter mudado no meio do caminho.
-- Se o `plan` não encontrar mudanças (`-detailed-exitcode` = 0), o job de `apply` é pulado e ninguém é acordado para aprovar um no-op.
+#### 3b. Infrastructure
 
----
-
-## Trabalhando localmente
-
-Autentique-se e entre no diretório do ambiente:
+The Terraform state lives in this project's Azure subscription, so these commands only work for a user with access to it.
 
 ```bash
 az login
+cd envs/dev
+terraform init
+terraform plan
 ```
+
+The expected plan has one in-place change on the Function App (two app settings kept empty on purpose; see [docs/infrastructure.md](docs/infrastructure.md)). To deploy into **your own** subscription instead, run `bootstrap/bootstrap.sh` and update `envs/dev/backend.tf` and `envs/dev/terraform.tfvars`, as described in the same guide.
+
+#### 3c. API locally
+
+With the virtual environment from 3a still active:
 
 ```bash
-terraform -chdir=envs/dev init
+cd apps/api
+cp local.settings.sample.json local.settings.json
+func start
 ```
+
+On Windows (PowerShell), use `copy` instead of `cp`. In another terminal:
 
 ```bash
-terraform -chdir=envs/dev plan
+curl http://localhost:7071/api/health
 ```
 
-Formatar tudo antes de commitar:
+The local API answers `/health` and rejects invalid input (`400`), but a valid `/posture` request returns `500`: the Cosmos DB firewall only admits the deployed Function's subnet, so your machine cannot read the data.
 
-```bash
-terraform fmt -recursive
-```
+#### 3d. Seed data
 
-Instalar os hooks de pre-commit (roda fmt, validate, tflint, checkov e terraform-docs a cada commit):
+The seed script writes the sample data from `apps/web/mock-data.js` into Cosmos DB, signing in with your `az login` (no keys). Because of the firewall, it needs your public IP allowed **temporarily**:
 
-```bash
-pre-commit install
-```
+1. Add `cosmos_ip_range_filter = ["<your-ip>"]` to `envs/dev/terraform.tfvars`, then `terraform plan` and `terraform apply` in `envs/dev`.
+2. Run the seed from the repository root (bash shown; in PowerShell set the variable with `$env:COSMOS_ENDPOINT = "..."`):
 
----
+   ```bash
+   export COSMOS_ENDPOINT=https://cosmos-meuapp-dev-brs.documents.azure.com:443/
+   python scripts/seed/seed.py
+   python scripts/seed/seed.py --check
+   ```
 
-## Convenções
+3. Remove the IP from `terraform.tfvars`, then `terraform plan` and `terraform apply` again.
 
-**Nomenclatura** — `<tipo>-<app>-<env>-<região>`, ex.: `rg-meuapp-prd-brs`, `vnet-meuapp-prd-brs`, `snet-app-meuapp-prd-brs`. Storage accounts não aceitam hífen, então usam `st<app><env><sufixo>`.
+The upsert is idempotent: running it twice does not duplicate data.
 
-**Tags** — `cost_center` e `owner` são obrigatórias (validadas em `variables.tf`, o plan falha sem elas). `environment`, `application`, `managed_by` e `repository` são adicionadas automaticamente.
+## 5. Security
 
-**Rede** — um `/16` por ambiente: dev `10.10`, stg `10.20`, prd `10.30`. Cada subnet ganha um NSG dedicado.
+- **No secrets anywhere.** The API reaches Cosmos DB and Storage with its managed identity and data-plane roles only (Cosmos DB Data Reader). Key-based access is disabled on Cosmos DB and on every storage account, and no connection string with a key exists in code, configuration or history.
+- **Isolation.** The API runs inside a VNet. Cosmos DB and the API's storage only admit the API's subnet, so the data is unreachable from the internet even with valid credentials. CORS admits only the dashboard's address.
+- **Hardening.** HTTPS only, TLS 1.2 minimum, basic-auth publishing (FTP and WebDeploy) disabled on the Function App, deploys only with Entra ID.
+- **Monitoring.** Logs from the API, the Function host, Cosmos DB, both storage accounts and the subscription's Activity Log go to one Log Analytics workspace, with 11 saved queries for review: denials, organization enumeration, blocked database access, writes to the website, key usage, control-plane changes and deploys. Alerts were designed but not created, to keep the fixed cost at zero.
 
-**Versões** — `required_version` fixo e providers com `~>`. O `.terraform.lock.hcl` **deve** ser commitado; o CI roda `init -lockfile=readonly` e falha se ele estiver desatualizado. Para atualizar:
+Details, the NIST SP 800-53 mapping and the evidence of each scenario: [docs/security-monitoring.md](docs/security-monitoring.md).
 
-```bash
-terraform -chdir=envs/dev init -upgrade
-```
+## 6. Known limitations
 
----
-
-## Adicionando um recurso novo
-
-1. Crie ou estenda um módulo em `modules/` — sem valores hardcoded, tudo por variável.
-2. Chame o módulo em `envs/dev/main.tf` e parametrize em `envs/dev/terraform.tfvars`.
-3. Abra o PR, leia o plan no comentário.
-4. Depois de validado em dev, promova copiando a chamada para `stg` e `prd`.
-
-A duplicação entre os `envs/` é intencional: ela permite que produção fique deliberadamente atrás de dev durante uma promoção.
-
----
-
-## Pontos de atenção
-
-- **A identidade de plan tem `Contributor`** — escopado ao resource group do próprio ambiente, não à subscription inteira, mas ainda é mais permissão do que um plan precisa. Endurecimento natural: um segundo app registration com apenas `Reader` + `Storage Blob Data Contributor` para os jobs de plan, deixando `Contributor` só no apply.
-- **O artefato `tfplan` pode conter valores sensíveis.** A retenção está em 3 dias. Se houver segredos no state, restrinja quem baixa artefatos ou criptografe o plan antes do upload.
-- **O resource group de cada ambiente não é gerenciado pelo Terraform.** Ele é criado pelo `bootstrap.sh` e referenciado via `data source` — não existe `terraform destroy` para ele. Para renomear ou mover o RG, é o `bootstrap.sh` (ou o `az cli` diretamente) que precisa mudar, não o `main.tf`.
-- **`PREFIX`/`LOCATION_SHORT` do bootstrap e `application`/`location_short` do `terraform.tfvars` precisam bater exatamente.** Se divergirem, o `terraform plan` falha com "resource group não encontrado" — o data source procura um nome que o bootstrap nunca criou.
-- **`shared_access_key_enabled = false`** na storage account da aplicação. Se alguma ferramenta legada precisar de connection string, ela vai quebrar; mude a variável explicitamente em vez de contornar por fora.
-- **O `checkov` roda em modo bloqueante.** Para liberar um achado específico, use um comentário `#checkov:skip=CKV_AZURE_XX:motivo` no recurso — com o motivo escrito.
-- **O plan do dev nunca dá "No changes": sempre mostra `+ "AzureWebJobsStorage" = null` e `+ "DEPLOYMENT_STORAGE_CONNECTION_STRING" = null` na Function.** É esperado e inofensivo. O `azurerm_function_app_flex_consumption` (provider 4.x) injeta esses dois settings com a chave da storage e os esconde do state; o módulo `function_app` declara os dois vazios, o host usa a identidade (`__accountName`) e o deploy já autentica pela identidade. Todo apply reafirma o vazio. **Não use `ignore_changes` nesses settings**: um apply futuro que mexa em outro app setting pode fazer o provider reinjetar a chave. A saída definitiva é migrar o recurso para o `azapi`, ou para o provider 6.x quando o `backend_storage` sair.
-- **Chamadas recusadas por falta de function key (401) não aparecem no App Insights.** O host do Functions rejeita a chave antes da função executar e não gera telemetria de request. Isso acaba quando a API passar a validar JWT do Entra ID (`authLevel` anônimo + 401 emitido pela própria função).
-- **stg e prd precisam de `storage { data_plane_available = false }` no provider antes do primeiro apply**, como já está no dev. Sem isso, o apply falha com 403 ao ler propriedades da storage protegida por firewall.
+- **`dev-anonymous` mode.** The university's Entra ID tenant does not let students register applications, so user sign-in is not active. In dev, the API takes the organization from the `?org=` query string, validated against `^org-[a-z0-9-]{1,40}$`, and anyone can read either organization by changing it. This is acceptable only because dev holds **fictitious data**. Every decision is still logged as an `AUTHZ` event.
+- **Other environments answer 401.** `stg` and `prd` are defined in Terraform but not deployed. The API's default mode (`entra`) answers `401 {"error": "authentication not configured"}`, and only dev's `terraform.tfvars` turns on `dev-anonymous`.
+- **No alerts and no sign-in logs.** Monitoring relies on reviewing the saved queries, and the tenant does not export Entra ID sign-in logs. See [docs/security-monitoring.md](docs/security-monitoring.md) for the full list.
+- **CI disabled.** The GitHub Actions workflows need the same Entra ID app registrations, so deploys run locally with `az login`.
